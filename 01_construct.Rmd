@@ -76,7 +76,19 @@ data_tech_field <- read_rds('../temp/tbl_region_tech_field.rds') %>% mutate(tech
 var_t_start <- 2000
 var_t_end <- 2020
 var_t_break <- 2010
+# maybe 5 year periods
+# 1: 1990 - 2000, 2000 - cq 2017
 ```
+
+
+```{r}
+data_appln %>%
+  count(earliest_filing_year) %>%
+  ggplot(aes(x = earliest_filing_year, y = n)) +
+  geom_line()
+```
+
+
 
 
 # Initial data cleaning
@@ -84,7 +96,7 @@ var_t_break <- 2010
 ```{r}
 # Limit timeframe, only include first patent per docdb family
 data_appln %<>%
-  filter(granted == 'Y') %>% # only granted patents
+  # filter(granted == 'Y') %>% # only granted patents
   group_by(docdb_family_id) %>%
     slice_min(order_by = appln_filing_date, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
@@ -100,6 +112,8 @@ data_pers_appln %<>% semi_join(data_appln, by = 'appln_id')
 data_person %<>% semi_join(data_pers_appln, by = 'person_id')
 data_tech_field %<>% semi_join(data_appln, by = 'appln_id')
 ```
+
+
 
 
 # Technology space (By technology classes)
@@ -260,7 +274,8 @@ regions <- region_RTA %>% distinct(nuts) %>% pull(nuts)
 
 
 ```{r, fig.width=15, fig.height= 10}
-i = 1; place <- regions[i]
+i = 1; 
+place <- regions[i]
 time =  '1'
 
 
@@ -268,8 +283,8 @@ g_tech %N>%
   left_join(region_RTA %>% filter(nuts == place, period == time) %>% select(techn_field_nr, rca, rca_Y, n_tech_region), by = c("name" = "techn_field_nr")) %>%
   ggraph(layout = coords_tech) + 
   geom_edge_link(aes(width = weight), alpha = 0.2, colour = "grey") + 
-  geom_node_point(aes(colour = rca_Y, size = n_tech_region)) + 
-  geom_node_text(aes(label = techn_field_name, size = dgr, filter = rca_Y >= 1), repel = TRUE) +
+  geom_node_point(aes(colour = rca, size = n_tech_region)) + 
+  geom_node_text(aes(label = techn_field_name, size = dgr, filter = rca >= 1), repel = TRUE) +
   scale_color_gradient2(low = "skyblue", mid = 'yellow', high = "red", midpoint = 1) +
   theme_graph() +
   labs(title =paste("Technology Space:", place, 'Period', time, sep = " "),
