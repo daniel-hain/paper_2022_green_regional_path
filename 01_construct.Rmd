@@ -1,0 +1,279 @@
+---
+title: 'Green Regional Path paper: Constructing Technology Spaces'
+author: "Daniel S. Hain"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_notebook:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+---
+
+## Setup
+
+```{r, setup, include=FALSE}
+# Not sure if necessary... was an issue with a version conflict... try new version in the future again...
+# devtools::install_version("RPostgres", version = "1.2.1", repos = "http://cran.us.r-project.org")
+
+### general options
+Sys.setenv(LANG = "en")
+options("scipen" = 100, "digits" = 4) # override R's tendency to use scientific notation
+
+### Clean workspace
+rm(list=ls())
+graphics.off()
+
+### Load packages (maybe need to be installed first)
+# Standard
+library(tidyverse) # General DS toolkit
+library(magrittr) # For advanced piping
+
+# Databases
+library(DBI) # GEneral R database interface
+library(RPostgres) # PostgreSQL interface driver 
+library(dbplyr) # for dplyr with databases
+```
+
+### Connect to database
+
+```{r}
+# Load script with variables
+source("../variables.R")
+
+# set up connection to existing PostgreSQL database, just plug in own details
+con <- dbConnect(drv = RPostgres::Postgres(), 
+                 dbname = var_dbname,
+                 host = var_host, 
+                 port = var_port,
+                 user = var_user, 
+                 password = var_password,
+                 sslmode = 'require'
+                 )
+
+rm(var_dbname, var_host, var_password, var_port, var_user)
+```
+
+```{r}
+con %>% dbListTables() %>% sort()
+```
+
+# Load tables
+
+```{r}
+data_appln <- read_rds('../temp/tbl_region_appln.rds')
+data_docdb_fam_cpc <- read_rds('../temp/tbl_region_docdb_fam_cpc.rds')
+data_pers_appln <- read_rds('../temp/tbl_region_pers_appln.rds')
+data_person <- read_rds('../temp/tbl_region_person.rds')
+data_tech_field <- read_rds('../temp/tbl_region_tech_field.rds') %>% mutate(techn_field_nr = techn_field_nr %>% as.character())
+```
+
+# Defining parameters
+
+```{r}
+var_t_start <- 2000
+var_t_end <- 2020
+var_t_break <- 2010
+```
+
+
+# Initial data cleaning
+
+```{r}
+# Limit timeframe, only include first patent per docdb family
+data_appln %<>%
+  filter(granted == 'Y') %>% # only granted patents
+  group_by(docdb_family_id) %>%
+    slice_min(order_by = appln_filing_date, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  filter(appln_filing_year >= var_t_start,
+         appln_filing_year <= var_t_end) %>%
+  mutate(period = ((appln_filing_year >= var_t_break) + 1) %>% as.numeric() %>% as.character()) 
+```
+
+```{r}
+# filter all others
+data_docdb_fam_cpc %<>% semi_join(data_appln, by = 'docdb_family_id')
+data_pers_appln %<>% semi_join(data_appln, by = 'appln_id')
+data_person %<>% semi_join(data_pers_appln, by = 'person_id')
+data_tech_field %<>% semi_join(data_appln, by = 'appln_id')
+```
+
+
+# Technology space (By technology classes)
+
+```{r}
+techn_field_names <- read_csv("../input/ipc_technology.csv") %>%
+  select(field_nr, sector, field_name) %>%
+  distinct(field_nr, .keep_all = TRUE) %>%
+  rename(techn_field_nr = field_nr,
+         techn_field_sector = sector,
+         techn_field_name = field_name) %>%
+  arrange(techn_field_nr) 
+```
+
+## Create Relatedness matrix
+
+```{r}
+# devtools::install_github("PABalland/EconGeo", force = T)
+library(EconGeo)
+```
+
+```{r}
+## Helper function
+create_sparse_matrix <- function(i_input, j_input, weight = NULL, projection = NULL, sparse = TRUE){
+  require(Matrix)
+  
+i_input <- factor(i_input)
+j_input <- factor(j_input)
+  
+if (is.null(weight)) {
+  value <- rep(1, length(i_input) )
+} else {
+  value <- weight
+}
+  
+  # Fill matrix
+  mat <- spMatrix(nrow = n_distinct(i_input),
+                  ncol = n_distinct(j_input),
+                  i =  as.numeric(i_input),
+                  j =  as.numeric(j_input),
+                  x = value)
+  rm(value)
+  
+  # Colnames
+  rownames(mat) <- i_input %>% levels()
+  colnames(mat) <- j_input %>% levels()
+  
+  # PRojection
+  if(projection == 'i') { mat <- tcrossprod(mat) }
+  if(projection == 'j') { mat <- crossprod(mat) }  
+
+  # Sparsity
+  if(sparse == FALSE) { mat <- as.matrix(mat) }  
+  
+  return(mat)
+}
+```
+
+
+```{r}
+mat_tech <- create_sparse_matrix(i = data_tech_field %>% pull(appln_id),
+                                       j = data_tech_field %>% pull(techn_field_nr),
+                                       weight = data_tech_field %>% pull(weight),
+                                       projection = 'j',
+                                       sparse = FALSE)
+```
+
+```{r}
+mat_tech %<>% relatedness(method = "cosine")
+```
+
+```{r}
+mat_tech %>% 
+  as.data.frame() %>%
+  rownames_to_column("j") %>%
+  pivot_longer(-c(j), names_to = "i", values_to = "relatedness") %>%
+  mutate(i = as.numeric(i),
+         j = as.numeric(j)) %>%
+  ggplot(aes(x = i, y = j, fill = relatedness)) + 
+  geom_raster() +
+  scale_fill_viridis_c() +
+  theme(legend.position = 'bottom') +
+  labs(title = 'Relatedness between technology classes',
+       subtitle = 'All regions & patents',
+       x = NULL, y = NULL)
+```
+
+## Technology Space
+
+```{r}
+library(tidygraph)
+library(ggraph)
+```
+
+```{r}
+g_tech <- mat_tech %>% as_tbl_graph(directed = FALSE) %N>%
+  left_join(techn_field_names %>% mutate(techn_field_nr = techn_field_nr %>% as.character()), by = c("name" = "techn_field_nr")) %>%
+  mutate(dgr = centrality_eigen(weights = weight)) %E>%
+  filter(weight >= mean(weight))
+```
+
+```{r}
+coords_tech <- g_tech %>% igraph::layout.fruchterman.reingold() %>% as_tibble()
+colnames(coords_tech) <- c("x", "y")
+```
+
+```{r, fig.width=15, fig.height= 10}
+g_tech %>%
+  ggraph(layout =  coords_tech) + 
+  geom_edge_link(aes(width = weight), alpha = 0.5, colour = "grey") + 
+  geom_node_point(aes(colour = techn_field_sector, size = dgr)) + 
+  geom_node_text(aes(label = techn_field_name, size = dgr), repel = TRUE) +
+  theme_void() +
+  labs(title =paste('Technology Space Neuroscience (obverall)'),
+       subtitle = 'Nodes = Technology fields. Edges: Relatedness')
+```
+
+## Regional specialization
+
+```{r}
+region_tech <- data_appln %>%
+  select(appln_id, appln_filing_year, period, Y_tag) %>%
+  left_join(data_tech_field, by = 'appln_id') %>%
+  left_join(data_pers_appln %>% filter(invt_seq_nr > 0) %>% select(appln_id, person_id, nuts), by = 'appln_id') 
+```
+
+```{r}
+region_RTA <- region_tech %>%  
+  # Summing weights of all and Y tag
+  group_by(nuts, techn_field_nr, period) %>%
+  summarise(n_tech_region = sum(weight, na.rm = TRUE),
+            n_tech_region_Y = sum(weight * Y_tag, na.rm = TRUE)) %>%
+  ungroup() %>%
+  drop_na() %>%
+  # Calculate location quotient
+    group_by(period) %>%
+    mutate(n = sum(n_tech_region, na.rm = TRUE),
+           n_Y = sum(n_tech_region_Y, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(period, nuts) %>%
+    mutate(n_region = sum(n_tech_region, na.rm = TRUE),
+           n_region_Y = sum(n_tech_region_Y, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(period, techn_field_nr) %>%
+    mutate(n_tech = sum(n_tech_region, na.rm = TRUE),
+           n_tech_Y = sum(n_tech_region_Y, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(rca = ((n_tech_region / n_region) / (n_tech / n)) %>% round(2),
+         rca_Y = ((n_tech_region_Y / n_region_Y) / (n_tech_Y / n_Y)) %>% round(2)) %>%
+  replace_na(list(rca = 0, rca_Y = 0, n_region = 0, n_tech_region = 0))
+```
+
+## Tech space by region
+
+```{r}
+regions <- region_RTA %>% distinct(nuts) %>% pull(nuts)
+```
+
+
+```{r, fig.width=15, fig.height= 10}
+i = 1; place <- regions[i]
+time =  '1'
+
+
+g_tech %N>%
+  left_join(region_RTA %>% filter(nuts == place, period == time) %>% select(techn_field_nr, rca, rca_Y, n_tech_region), by = c("name" = "techn_field_nr")) %>%
+  ggraph(layout = coords_tech) + 
+  geom_edge_link(aes(width = weight), alpha = 0.2, colour = "grey") + 
+  geom_node_point(aes(colour = rca_Y, size = n_tech_region)) + 
+  geom_node_text(aes(label = techn_field_name, size = dgr, filter = rca_Y >= 1), repel = TRUE) +
+  scale_color_gradient2(low = "skyblue", mid = 'yellow', high = "red", midpoint = 1) +
+  theme_graph() +
+  labs(title =paste("Technology Space:", place, 'Period', time, sep = " "),
+       subtitle = 'Nodes = Technology fields. Edges: Relatedness, Color = RTA')
+```
+
+
