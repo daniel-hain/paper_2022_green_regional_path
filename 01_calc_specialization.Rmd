@@ -1,0 +1,246 @@
+---
+title: 'Green Regional Path paper: Constructing Technology Spaces'
+author: "Daniel S. Hain"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_notebook:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+---
+
+## Setup
+
+```{r, setup, include=FALSE}
+# Not sure if necessary... was an issue with a version conflict... try new version in the future again...
+# devtools::install_version("RPostgres", version = "1.2.1", repos = "http://cran.us.r-project.org")
+
+### general options
+Sys.setenv(LANG = "en")
+options("scipen" = 100, "digits" = 4) # override R's tendency to use scientific notation
+
+### Clean workspace
+rm(list=ls())
+graphics.off()
+
+### Load packages (maybe need to be installed first)
+# Standard
+library(tidyverse) # General DS toolkit
+library(magrittr) # For advanced piping
+
+# Databases
+library(DBI) # GEneral R database interface
+library(RPostgres) # PostgreSQL interface driver 
+library(dbplyr) # for dplyr with databases
+
+# Load functions
+source("functions/functions_relatedness.R")
+```
+
+### Connect to database
+
+```{r}
+# Load script with variables
+source("../variables.R")
+
+# set up connection to existing PostgreSQL database, just plug in own details
+con <- dbConnect(drv = RPostgres::Postgres(), 
+                 dbname = var_dbname,
+                 host = var_host, 
+                 port = var_port,
+                 user = var_user, 
+                 password = var_password,
+                 sslmode = 'require'
+                 )
+
+rm(var_dbname, var_host, var_password, var_port, var_user)
+```
+
+```{r}
+# con %>% dbListTables() %>% sort()
+```
+
+# Defining parameters
+
+```{r}
+var_t_start <- 1990
+var_t_end <- 2017
+var_t_break <- 2000
+```
+
+# Load tables
+
+```{r}
+data_appln <- read_rds('../temp/tbl_region_appln.rds')
+data_docdb_fam_cpc <- read_rds('../temp/tbl_region_docdb_fam_cpc.rds')
+data_pers_appln <- read_rds('../temp/tbl_region_pers_appln.rds')
+data_person <- read_rds('../temp/tbl_region_person.rds') %>% filter(nuts_level == 3)
+data_tech_field <- read_rds('../temp/tbl_region_tech_field.rds') %>% mutate(techn_field_nr = techn_field_nr %>% as.character())
+```
+
+# Initial data cleaning
+
+# Restrict by inventors only
+
+```{r}
+# Filter for only inventors
+data_pers_appln %<>%
+  filter(invt_seq_nr > 0)
+```
+
+```{r}
+# Filter applications and persons
+data_appln %<>% semi_join(data_pers_appln, by = 'appln_id')
+data_person %<>% semi_join(data_pers_appln, by = 'person_id')
+```
+
+
+## Restrict patent applications (families, years...)
+
+```{r}
+# Limit timeframe,
+data_appln %<>%
+  # filter(granted == 'Y') %>% # only granted patents
+  filter(appln_filing_year >= var_t_start,
+         appln_filing_year <= var_t_end) 
+```
+
+
+```{r}
+# only include first patent per docdb family
+data_appln %<>%
+  group_by(docdb_family_id) %>%
+    slice_min(order_by = appln_filing_date, n = 1, with_ties = FALSE) %>%
+  ungroup() 
+```
+
+## Final application preprocessing
+
+```{r}
+# Create period tag
+data_appln %<>%
+  mutate(period = ((appln_filing_year >= var_t_break) + 1) %>% as.numeric() %>% as.character()) 
+```
+
+
+## Filter all other datasets
+
+```{r}
+data_docdb_fam_cpc %<>% semi_join(data_appln, by = 'docdb_family_id')
+data_pers_appln %<>% semi_join(data_appln, by = 'appln_id')
+data_person %<>% semi_join(data_pers_appln, by = 'person_id')
+data_tech_field %<>% semi_join(data_appln, by = 'appln_id')
+```
+
+## Weight Persons
+
+```{r}
+data_inv_appln <- data_pers_appln %>%
+  group_by(appln_id) %>%
+  mutate(n_inv = n()) %>%
+  ungroup()
+```
+
+# Technology space (By technology classes)
+
+```{r}
+techn_field_names <- read_csv("../input/ipc_technology.csv") %>%
+  select(field_nr, sector, field_name) %>%
+  distinct(field_nr, .keep_all = TRUE) %>%
+  rename(techn_field_nr = field_nr,
+         techn_field_sector = sector,
+         techn_field_name = field_name) %>%
+  arrange(techn_field_nr) 
+```
+
+## Create Relatedness matrix
+
+```{r}
+# devtools::install_github("PABalland/EconGeo", force = T)
+library(EconGeo)
+```
+
+```{r}
+mat_tech <- create_sparse_matrix(i = data_tech_field %>% pull(appln_id),
+                                       j = data_tech_field %>% pull(techn_field_nr),
+                                       weight = data_tech_field %>% pull(weight),
+                                       projection = 'j',
+                                       sparse = FALSE)
+```
+
+```{r}
+mat_tech %<>% relatedness(method = "cosine")
+```
+
+## Technology Space
+
+```{r}
+library(tidygraph)
+library(ggraph)
+```
+
+```{r}
+g_tech <- mat_tech %>% as_tbl_graph(directed = FALSE) %N>%
+  left_join(techn_field_names %>% mutate(techn_field_nr = techn_field_nr %>% as.character()), by = c("name" = "techn_field_nr")) %>%
+  mutate(dgr = centrality_eigen(weights = weight)) %E>%
+  filter(weight >= mean(weight))
+```
+
+
+
+## Regional specialization
+
+```{r}
+region_tech <- data_appln %>%
+  select(appln_id, appln_filing_year, period, Y_tag) %>%
+  left_join(data_tech_field, by = 'appln_id') %>%
+  left_join(data_inv_appln %>% select(appln_id, person_id, nuts, n_inv), by = 'appln_id') %>%
+  mutate(weight_frac = weight / n_inv)
+```
+
+# Regional path identification
+
+```{r}
+region_RTA <- region_tech %>%  
+  drop_na(Y_tag, nuts, techn_field_nr, period) %>%
+  # Summing weights of non-Y and Y tagged 
+  group_by(Y_tag, nuts, techn_field_nr, period) %>%
+  summarise(n_tech_region = sum(weight_frac, na.rm = TRUE)) %>%
+  ungroup() %>%
+  # Calculate location quotient
+    group_by(Y_tag, period) %>%
+    mutate(n = sum(n_tech_region, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(Y_tag, period, nuts) %>%
+    mutate(n_region = sum(n_tech_region, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(Y_tag, period, techn_field_nr) %>%
+    mutate(n_tech = sum(n_tech_region, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(rta = ((n_tech_region / n_region) / (n_tech / n)) %>% round(2),
+         rta_bin = (rta >= 1) %>% as.numeric() ) %>%
+  # Replace NAs
+  replace_na(list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0)) %>%
+  complete(Y_tag, nuts, techn_field_nr, period, fill = list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0))
+```
+
+# Save all
+
+```{r}
+# Regular tables
+data_appln %>% write_rds('../temp/data_appln.rds')
+data_docdb_fam_cpc %>% write_rds('../temp/data_docdb_fam_cpc.rds')
+data_pers_appln  %>% write_rds('../temp/tbl_region_inv_appln.rds')
+data_person %>% write_rds('../temp/data_inv.rds')
+data_tech_field %>% write_rds('../temp/data_tech_field.rds')
+
+# Adittional ones
+g_tech %>% write_rds('../temp/g_tech.rds')
+region_RTA %>% write_rds('../temp/region_RTA.rds')
+region_tech %>% write_rds('../temp/region_tech.rds')
+```
+
+

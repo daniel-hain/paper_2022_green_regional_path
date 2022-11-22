@@ -1,0 +1,222 @@
+---
+title: 'Green Regional Path paper: Constructing Technology Spaces'
+author: "Daniel S. Hain"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_notebook:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+---
+
+## Setup
+
+```{r, setup, include=FALSE}
+# Not sure if necessary... was an issue with a version conflict... try new version in the future again...
+# devtools::install_version("RPostgres", version = "1.2.1", repos = "http://cran.us.r-project.org")
+
+### general options
+Sys.setenv(LANG = "en")
+options("scipen" = 100, "digits" = 4) # override R's tendency to use scientific notation
+
+### Clean workspace
+rm(list=ls())
+graphics.off()
+
+### Load packages (maybe need to be installed first)
+# Standard
+library(tidyverse) # General DS toolkit
+library(magrittr) # For advanced piping
+
+# Databases
+library(DBI) # GEneral R database interface
+library(RPostgres) # PostgreSQL interface driver 
+library(dbplyr) # for dplyr with databases
+
+# Load functions
+source("functions/functions_relatedness.R")
+```
+
+### Connect to database
+
+```{r}
+# Load script with variables
+source("../variables.R")
+
+# set up connection to existing PostgreSQL database, just plug in own details
+con <- dbConnect(drv = RPostgres::Postgres(), 
+                 dbname = var_dbname,
+                 host = var_host, 
+                 port = var_port,
+                 user = var_user, 
+                 password = var_password,
+                 sslmode = 'require'
+                 )
+
+rm(var_dbname, var_host, var_password, var_port, var_user)
+```
+
+```{r}
+# con %>% dbListTables() %>% sort()
+```
+
+# Defining parameters
+
+```{r}
+n_regions = 10
+```
+
+
+
+# Texnology space general
+
+```{r}
+set.seed(1337)
+coords_tech <- g_tech %>% igraph::layout.fruchterman.reingold() %>% as_tibble()
+colnames(coords_tech) <- c("x", "y")
+```
+
+```{r, fig.width=15, fig.height= 10}
+g_tech %>%
+  ggraph(layout =  coords_tech) + 
+  geom_edge_link(aes(width = weight), alpha = 0.5, colour = "grey") + 
+  geom_node_point(aes(colour = techn_field_sector, size = dgr)) + 
+  geom_node_text(aes(label = techn_field_name, size = dgr), repel = TRUE) +
+  theme_void() +
+  labs(title =paste('Technology Space Neuroscience (obverall)'),
+       subtitle = 'Nodes = Technology fields. Edges: Relatedness')
+```
+
+## Restrict to top N regions
+
+```{r}
+top_regions <- region_tech %>%
+  group_by(nuts) %>%
+  summarise(n = sum(weight_frac, na.rm = TRUE),
+            n_Y = sum(weight_frac * Y_tag, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(share_Y = n_Y / (n + n_Y)) %>%
+  arrange(desc(share_Y))
+```
+
+
+```{r}
+tech_rel <- g_tech %E>%
+  as_tibble() %>%
+  mutate(pct_rank = weight %>% percent_rank()) %>%
+  arrange(from, to)
+```
+
+```{r}
+tech_dev <- region_RTA %>%
+  select(period, nuts, techn_field_nr, Y_tag, n_tech_region, rta, rta_bin) %>%
+  arrange(nuts, techn_field_nr, Y_tag, period) 
+```
+
+## Dataviz
+
+```{r}
+p1 <- region_RTA %>%
+  semi_join(top_regions %>% arrange(desc(n_Y)) %>% slice(1:n_regions), by = 'nuts') %>%
+  group_by(nuts, period, Y_tag) %>%
+  summarise(n_spec = rta_bin %>% sum(na.rm = TRUE),
+            n_spec_count = (n_tech_region * rta_bin) %>% sum(na.rm = TRUE) ) %>%
+  ungroup() %>%
+  #group_by(nuts, period) %>%
+  #summarise(Y_share = sum(Y_tag * n_spec, na.rm = TRUE) / sum(n_spec, na.rm = TRUE),
+  #          Y_count = sum(Y_tag * n_spec_count, na.rm = TRUE)) %>%
+  #ungroup() %>%
+  mutate(nuts_period = paste(nuts, 'P', period)) %>%
+  pivot_wider(names_from = Y_tag, values_from = c(n_spec, n_spec_count), values_fill = 0, names_prefix = 'Y_tag_') 
+
+p2 <- p1 %>% 
+  select(period, nuts, n_spec_Y_tag_FALSE, n_spec_Y_tag_TRUE) %>%
+  pivot_wider(names_from = period, values_from = c(n_spec_Y_tag_FALSE, n_spec_Y_tag_TRUE))
+```
+
+```{r}
+p1 %>%
+  ggplot(aes(x = n_spec_Y_tag_FALSE, y = n_spec_Y_tag_TRUE)) +
+  geom_point(aes(size = n_spec_count_Y_tag_TRUE, col = nuts)) +
+  geom_text(aes(label = nuts), position = position_dodge(0.9), alpha = 0.75) +
+  geom_segment(data = p2, 
+               aes(x = n_spec_Y_tag_FALSE_1,
+                   y = n_spec_Y_tag_TRUE_1,
+                   xend = n_spec_Y_tag_FALSE_2,
+                   yend = n_spec_Y_tag_TRUE_2,
+                   size = 1),
+               alpha = 0.15,
+               arrow = arrow(length = unit(0.5, "cm"), type = "closed"),
+               show.legend = FALSE) +
+  labs(x = 'N non-green specializations',
+       y = 'N green specializations',
+       size = 'N green patents') 
+```
+
+
+
+
+
+
+
+
+  group_by(nuts, techn_field_nr, Y_tag) %>%
+  mutate(rta_dev = case_when(
+    rta_bin < lag(rta_bin, 1)  ~ -1,
+    rta_bin == lag(rta_bin, 1)  ~ 0,
+    rta_bin > lag(rta_bin, 1)  ~ 1 
+  )) %>%
+  ungroup()
+
+TODO:
+
+* Calculate green and non green specialization profile over time
+* calculate relatedness to previous specialization
+* Generate matrix
+
+
+
+
+
+
+
+
+
+
+<!---
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
+XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
+XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+--->
+
+# Dataviz
+
+```{r}
+regions <- region_RTA %>% distinct(nuts) %>% pull(nuts)
+```
+
+
+```{r, fig.width=15, fig.height= 10}
+i = 1; place <- regions[i]
+time =  '1'
+
+g_tech %N>%
+  left_join(region_RTA %>% filter(nuts == place, period == time) %>% select(techn_field_nr, rca, rca_Y, n_tech_region), by = c("name" = "techn_field_nr")) %>%
+  ggraph(layout = coords_tech) + 
+  geom_edge_link(aes(width = weight), alpha = 0.2, colour = "grey") + 
+  geom_node_point(aes(colour = rca, size = n_tech_region)) + 
+  geom_node_text(aes(label = techn_field_name, size = rca, filter = rca >= 1), repel = TRUE) +
+  scale_color_gradient2(low = "skyblue", mid = 'yellow', high = "red", midpoint = 1) +
+  theme_graph() +
+  labs(title =paste("Technology Space:", place, 'Period', time, sep = " "),
+       subtitle = 'Nodes = Technology fields. Edges: Relatedness, Color = RTA')
+```

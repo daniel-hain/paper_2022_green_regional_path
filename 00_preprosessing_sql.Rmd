@@ -82,37 +82,39 @@ tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
 # Regions
 
 ```{r}
-# Define regions to include
 select_region <- tibble(
-  nuts = c(
-    'SE232', # Västra Götaland county
-    'NO043', # Rogaland 
-    'DK012' # Copenhagen suburbs
+  person_ctry_code = c('SE', 'NO','DK', 'FI'
   )) %>%
   copy_to(con, ., "xtra_select_region",
   temporary = TRUE, overwrite = TRUE)
-
 tbl_select_region <- tbl(con, 'xtra_select_region')
+
+# # or select by nuts
+# nuts = c(
+#     'SE232', # Västra Götaland county
+#     'NO043', # Rogaland 
+#     'DK012' # Copenhagen suburbs))
 ```
 
 ```{r}
 # select persons in regions
 tbl_region_person <- tbl_person %>%
-  semi_join(tbl_select_region, by = 'nuts') %>%
+  filter(nuts_level == 3) %>%
+  semi_join(tbl_select_region, by = 'person_ctry_code') %>%
   compute()
 ```
 
 ```{r}
 # Identify person-applications
 tbl_region_pers_appln <- tbl_pers_appln %>%
-  inner_join(tbl_region_person %>% select(person_id, nuts), by = 'person_id') %>%
+  inner_join(tbl_region_person %>% select(person_id, person_ctry_code, nuts), by = 'person_id') %>%
   compute()
 ```
 
 ```{r}
 # Identify applications
 tbl_region_appln <- tbl_appln %>%
-  semi_join(tbl_region_pers_appln %>% filter(invt_seq_nr > 0), by = 'appln_id') %>%
+  semi_join(tbl_region_pers_appln, by = 'appln_id') %>%
   compute()
 ```
 
@@ -140,7 +142,8 @@ tbl_region_appln %<>%
               filter(Y_tag == TRUE) %>% 
               distinct(docdb_family_id, Y_tag), 
             by = 'docdb_family_id') %>%
-  replace_na(list(Y_tag = FALSE)) 
+  replace_na(list(Y_tag = FALSE))  %<>%
+  compute()
 ```
 
 ```{r}
@@ -160,20 +163,17 @@ tbl_region_tech_field %>% collect() %>% write_rds('../temp/tbl_region_tech_field
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+<!---
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
+XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
+XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+--->
 
 # Applications
 
