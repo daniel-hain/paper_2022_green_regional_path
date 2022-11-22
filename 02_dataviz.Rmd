@@ -1,5 +1,5 @@
 ---
-title: 'Green Regional Path paper: Constructing Technology Spaces'
+title: 'Green Regional Path paper: Dataviz'
 author: "Daniel S. Hain"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -40,7 +40,9 @@ library(dbplyr) # for dplyr with databases
 source("functions/functions_relatedness.R")
 ```
 
-### Connect to database
+# Initial preperation
+
+## Connect to database
 
 ```{r}
 # Load script with variables
@@ -63,13 +65,69 @@ rm(var_dbname, var_host, var_password, var_port, var_user)
 # con %>% dbListTables() %>% sort()
 ```
 
-# Defining parameters
+## Load data
+
+```{r}
+# Regular tables
+data_appln <- read_rds('../temp/data_appln.rds')
+data_docdb_fam_cpc <- read_rds('../temp/data_docdb_fam_cpc.rds')
+data_invt_appln  <- read_rds('../temp/data_inv_appln.rds')
+data_invt <- read_rds('../temp/data_inv.rds')
+data_tech_field <- read_rds('../temp/data_tech_field.rds')
+
+# Adittional ones
+g_tech <- read_rds('../temp/g_tech.rds')
+region_RTA <- read_rds('../temp/region_RTA.rds')
+region_tech <- read_rds('../temp/region_tech.rds')
+```
+
+## Defining parameters
 
 ```{r}
 n_regions = 10
 ```
 
+```{r}
+# Restrict to top N regions
+top_regions <- region_tech %>%
+  group_by(nuts) %>%
+  summarise(n = sum(weight_frac, na.rm = TRUE),
+            n_Y = sum(weight_frac * Y_tag, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(share_Y = n_Y / (n + n_Y)) %>%
+  arrange(desc(n_Y)) %>%
+  slice(1:n_regions)
+```
 
+
+
+
+# Patent application development
+
+```{r}
+data_appln %>%
+  count(appln_filing_year, Y_tag) %>%
+  ggplot(aes(x = appln_filing_year, y = n, col = Y_tag)) + 
+  geom_line(key_glyph = "timeseries") +
+  labs(title = 'Patent applications: Development',
+       subtitle = 'All Nordic contries, by Y tag',
+       x = 'Year',
+       y = 'Number applications',
+       col = 'Green')
+```
+```{r}
+data_invt_appln %>%
+  semi_join(top_regions, by = 'nuts') %>%
+  count(appln_filing_year, nuts, Y_tag, wt = weight_frac) %>%
+  ggplot(aes(x = appln_filing_year, y = n, col = nuts)) + 
+  geom_line(key_glyph = "timeseries") +
+  facet_wrap(vars(Y_tag), scales = 'free') +
+  labs(title = 'Patent applications: Development',
+       subtitle = 'All Nordic contries',
+       x = 'Year',
+       y = 'Number applications, by region and Y tag',
+       col = 'Nuts3')
+```
 
 # Texnology space general
 
@@ -90,20 +148,10 @@ g_tech %>%
        subtitle = 'Nodes = Technology fields. Edges: Relatedness')
 ```
 
-## Restrict to top N regions
+# Specialization development
 
 ```{r}
-top_regions <- region_tech %>%
-  group_by(nuts) %>%
-  summarise(n = sum(weight_frac, na.rm = TRUE),
-            n_Y = sum(weight_frac * Y_tag, na.rm = TRUE)) %>%
-  ungroup() %>%
-  mutate(share_Y = n_Y / (n + n_Y)) %>%
-  arrange(desc(share_Y))
-```
-
-
-```{r}
+# dataframe with technology relatedness edgelist
 tech_rel <- g_tech %E>%
   as_tibble() %>%
   mutate(pct_rank = weight %>% percent_rank()) %>%
@@ -111,16 +159,17 @@ tech_rel <- g_tech %E>%
 ```
 
 ```{r}
+# Dataframe with regions and technology fields
 tech_dev <- region_RTA %>%
   select(period, nuts, techn_field_nr, Y_tag, n_tech_region, rta, rta_bin) %>%
   arrange(nuts, techn_field_nr, Y_tag, period) 
 ```
 
-## Dataviz
+## Dataviz: 
 
 ```{r}
 p1 <- region_RTA %>%
-  semi_join(top_regions %>% arrange(desc(n_Y)) %>% slice(1:n_regions), by = 'nuts') %>%
+  semi_join(top_regions, by = 'nuts') %>%
   group_by(nuts, period, Y_tag) %>%
   summarise(n_spec = rta_bin %>% sum(na.rm = TRUE),
             n_spec_count = (n_tech_region * rta_bin) %>% sum(na.rm = TRUE) ) %>%
@@ -151,9 +200,12 @@ p1 %>%
                alpha = 0.15,
                arrow = arrow(length = unit(0.5, "cm"), type = "closed"),
                show.legend = FALSE) +
-  labs(x = 'N non-green specializations',
+  labs(title = '', 
+       subtitle = '',
+       note = '',
+       x = 'N non-green specializations',
        y = 'N green specializations',
-       size = 'N green patents') 
+       size = 'N green patents',) 
 ```
 
 

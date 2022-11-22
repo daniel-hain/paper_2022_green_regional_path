@@ -67,15 +67,11 @@ con %>% dbListTables() %>% sort()
 ```{r}
 tbl_appln <- tbl(con, 'tls201_appln')
 tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
-
 tbl_pers_appln <- tbl(con, 'tls207_pers_appln') 
 tbl_person <- tbl(con, 'tls206_person')
-
 tbl_appln_cpc <- tbl(con, 'tls224_appln_cpc')
 tbl_docdb_fam_cpc <- tbl(con, 'tls225_docdb_fam_cpc')
-
 tbl_tech_field <- tbl(con, 'tls230_appln_techn_field')
-
 tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
 ```
 
