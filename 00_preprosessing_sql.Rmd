@@ -71,8 +71,9 @@ tbl_pers_appln <- tbl(con, 'tls207_pers_appln')
 tbl_person <- tbl(con, 'tls206_person')
 tbl_appln_cpc <- tbl(con, 'tls224_appln_cpc')
 tbl_docdb_fam_cpc <- tbl(con, 'tls225_docdb_fam_cpc')
-tbl_tech_field <- tbl(con, 'tls230_appln_techn_field')
 tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
+tbl_appln_nace2 <- tbl(con, 'tls229_appln_nace2')
+# tbl_tech_field <- tbl(con, 'tls230_appln_techn_field')
 ```
 
 # Regions
@@ -103,7 +104,15 @@ tbl_region_person <- tbl_person %>%
 ```{r}
 # Identify person-applications
 tbl_region_pers_appln <- tbl_pers_appln %>%
+  filter(invt_seq_nr > 0) %>%
   inner_join(tbl_region_person %>% select(person_id, person_ctry_code, nuts), by = 'person_id') %>%
+  compute()
+```
+
+```{r}
+# Update person dataframe for only inventors
+tbl_region_person  %<>%
+  semi_join(tbl_region_pers_appln, by = 'person_id') %>%
   compute()
 ```
 
@@ -115,13 +124,6 @@ tbl_region_appln <- tbl_appln %>%
 ```
 
 # Technologies
-
-```{r}
-# Filter tech fields
-tbl_region_tech_field <- tbl_tech_field %>%
-  semi_join(tbl_region_appln, by = 'appln_id') %>%
-  compute()
-```
 
 ```{r}
 # Filter CPCs in region and label Y02 tags
@@ -146,173 +148,63 @@ tbl_region_appln %<>%
 tbl_region_appln %>% count(Y_tag)
 ```
 
+```{r}
+# Filter Nace codes per application
+tbl_region_appln_nace2 <- tbl_appln_nace2 %>%
+  semi_join(tbl_region_appln, by = 'appln_id') %>%
+  compute()
+```
+
+```{r}
+# # Filter tech fields ----> NOTE: Not needed now anymore
+# tbl_region_tech_field <- tbl_tech_field %>%
+#  semi_join(tbl_region_appln, by = 'appln_id') %>%
+#  compute()
+```
+
+# Applicants
+
+Note: Not applicants from the region, but applicants that have inventors in the region
+
+```{r}
+# Now get the applicants of all the applcations
+
+# Identify person-applications
+tbl_region_applt_appln <- tbl_pers_appln %>%
+  filter(applt_seq_nr > 0) %>%
+  semi_join(tbl_region_appln, by = 'appln_id') %>%
+  compute()
+
+# Identify applicants
+tbl_region_applt <- tbl_person  %>%
+  semi_join(tbl_region_applt_appln, by = 'person_id') %>%
+  compute()
+```
 
 # Save all
 
 ```{r}
 tbl_region_appln %>% collect() %>% write_rds('../temp/tbl_region_appln.rds')
-tbl_region_docdb_fam_cpc %>% collect() %>% write_rds('../temp/tbl_region_docdb_fam_cpc.rds')
+
 tbl_region_pers_appln %>% collect() %>% write_rds('../temp/tbl_region_pers_appln.rds')
 tbl_region_person %>% collect() %>% write_rds('../temp/tbl_region_person.rds')
-tbl_region_tech_field %>% collect() %>% write_rds('../temp/tbl_region_tech_field.rds')
+
+tbl_region_applt_appln %>% collect() %>% write_rds('../temp/tbl_region_applt_appln.rds')
+tbl_region_applt %>% collect() %>% write_rds('../temp/tbl_region_applt.rds')
+
+tbl_region_docdb_fam_cpc %>% collect() %>% write_rds('../temp/tbl_region_docdb_fam_cpc.rds')
+tbl_region_appln_nace2 %>% collect() %>% write_rds('../temp/tbl_region_appln_nace2.rds')
+# tbl_region_tech_field %>% collect() %>% write_rds('../temp/tbl_region_tech_field.rds')
 ```
-
-
-
-<!---
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
-XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
-XXXXXXXXXXXXXXXXXX OLD ANALYSIS 
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
---->
-
-# Applications
-
-## Identify IP5
-
-```{r}
-# IP% filter
-tbl_appln_ip5 <- tbl_appln %>% select(appln_id, appln_auth, docdb_family_id)  %>%
-  mutate(docdb_ip5 = ifelse(appln_auth %in% c('US', 'EU', 'JP', 'CN', 'KR'), 1, 0) ) %>%
-  group_by(docdb_family_id) %>%
-    summarise(docdb_ip5 = max(docdb_ip5, na.rm = TRUE) ) %>%
-  ungroup() %>%
-  compute()
-```
-
-## Set up application table (only priorities)
-
-
-## ALTERNATIVE 1: Tag
-
-Here we only tag but not yet filter
-
-- Applications without IP5 ofice in DOCDB family
-- Applications in multiple clusters
-
-```{r}
-tbl_neuro_appln <- tbl_sim %>% 
-  # Get priority. NOTE: TODO Use Florians Table of priority filings instead once integrated 
-  left_join(tbl_appln %>% select(appln_id, earliest_filing_id, docdb_family_id, earliest_filing_year),  by = 'appln_id') %>% 
-  select(-appln_id) %>%
-  rename(appln_id = earliest_filing_id,
-         appln_filing_year = earliest_filing_year) %>% 
-  # Restrict to unique applications per cluster
-  group_by(appln_id, cluster) %>%
-    slice_min(order_by = cos_dist, n = 1, with_ties = FALSE) %>%
-  ungroup() %>%
-  # Tag main cluster per application (the one with max similarity)
-  group_by(appln_id) %>%
-    mutate(cluster_main = ifelse(cos_dist == max(cos_dist, na.rm = TRUE), 1, 0) ) %>%
-  ungroup() %>%
-  # Tag IP5: Join with application data with IP5 tag (or later filtering)
-  left_join(tbl_appln_ip5, by = 'docdb_family_id') %>%  
-  # Finalize
- select(appln_id, docdb_family_id, cluster, cos_dist, appln_filing_year, cluster_main, docdb_ip5) %>%
-  # Compute
-  compute(name = 'xtra_neuro_appln',
-          temporary = FALSE,
-          overwrite = TRUE)
-
-```
-
-
-# Persons
-
-```{r}
-tbl_neuro_person_appln <- tbl_pers_appln %>%
-  semi_join(tbl_neuro_appln, by = 'appln_id') %>%
-  compute(name = 'xtra_neuro_person_appln',
-          temporary = FALSE)
-```
-
-```{r}
-tbl_neuro_person_appln <- tbl(con, 'xtra_neuro_person_appln')
-```
-
-```{r}
-tbl_neuro_person <- tbl_person %>%
-  semi_join(tbl_neuro_person_appln, by = 'person_id') %>%
-  compute(name = 'xtra_neuro_person',
-          temporary = FALSE)
-```
-
-```{r}
-tbl_neuro_person <- tbl(con, 'xtra_neuro_person')
-```
-
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-
-# IPC
-
-```{r}
-tbl_neuro_appln_ipc <- tbl(con, 'tls209_appln_ipc') %>%
-  select(appln_id, ipc_class_symbol, ipc_position) %>%
-  semi_join(tbl_neuro_appln, by = 'appln_id') %>%
-  mutate(ipc1 = ipc_class_symbol %>% str_sub(start = 1, end = 1),
-         ipc3 = ipc_class_symbol %>% str_sub(start = 1, end = 3)) %>%
-  compute(name = 'xtra_neuro_appln_ipc',
-          temporary = FALSE)
-```
-
-```{r}
-tbl_neuro_appln_ipc <- tbl(con, 'xtra_neuro_appln_ipc')
-```
-
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-
-# Geocoding
-
-```{r}
-tbl_geo_applicant <- tbl(con, 'xtra_geo_applicant')
-tbl_geo_inventor <- tbl(con, 'xtra_geo_inventor')
-```
-
-```{r}
-tbl_neuro_geo_appln_applicant <- tbl_geo_applicant %>%
-  select(appln_id, person_id, person_ctry_code, person_city, lat, lon) %>%
-  semi_join(tbl_neuro_appln, by = 'appln_id') %>%
-   compute(name = 'xtra_neuro_geo_appln_applicant',
-          temporary = FALSE) 
-# dbRemoveTable(con, 'xtra_neuro_geo_appln_applicant')
-```
-
-```{r}
-tbl_neuro_geo_appln_inventor <- tbl_geo_inventor %>%
-  select(appln_id, person_id, person_ctry_code, person_city, lat, lon) %>%
-  semi_join(tbl_neuro_appln, by = 'appln_id') %>%
-   compute(name = 'xtra_neuro_geo_appln_inventor',
-          temporary = FALSE) 
-# dbRemoveTable(con, 'xtra_neuro_geo_appln_inventor')
-```
-
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
-<!--- :::::::::::::::::::::::::::::::::::::::::: NEW SECTION :::::::::::::::::::::::::::::::::::::::::: --->
 
 # close
 
 ```{r}
-# To remove one table
-# dbRemoveTable(con, 'xtra_appln_ipc_neuro')
-
-# To remove all neuro tables
-# # To delete all tables
-# rem <- dbListTables(con); rem <- rem[rem != 'users']; rem <- rem[str_detect(rem, '.*neuro_.*')]; for(i in 1:length(rem )){dbRemoveTable(con, rem[i])}; rm(rem)
-```
-
-
-
-```{r}
 dbDisconnect(con)
 ```
+
+```{r}
+sessionInfo()
+```
+
 

@@ -78,27 +78,10 @@ data_appln <- read_rds('../temp/tbl_region_appln.rds')
 data_docdb_fam_cpc <- read_rds('../temp/tbl_region_docdb_fam_cpc.rds')
 data_pers_appln <- read_rds('../temp/tbl_region_pers_appln.rds')
 data_person <- read_rds('../temp/tbl_region_person.rds') %>% filter(nuts_level == 3)
-data_tech_field <- read_rds('../temp/tbl_region_tech_field.rds') %>% mutate(techn_field_nr = techn_field_nr %>% as.character())
+data_nace2 <- read_rds('../temp/tbl_region_appln_nace2.rds') 
 ```
 
 # Initial data cleaning
-
-# Restrict by inventors only
-
-```{r}
-# Filter for only inventors
-data_invt_appln <-data_pers_appln %>%
-  filter(invt_seq_nr > 0)
-
-data_applt_appln <-data_pers_appln %>%
-  filter(applt_seq_nr > 0)
-```
-
-```{r}
-# Filter applications and persons
-data_appln %<>% semi_join(data_invt_appln, by = 'appln_id')
-data_person %<>% semi_join(data_invt_appln, by = 'person_id')
-```
 
 ## Restrict patent applications (families, years...)
 
@@ -127,21 +110,19 @@ data_appln %<>%
   mutate(period = ((appln_filing_year >= var_t_break) + 1) %>% as.numeric() %>% as.character()) 
 ```
 
-
-## Filter all other datasets
+## Filter all datasets
 
 ```{r}
-data_invt_appln %<>% inner_join(data_appln %>% select(appln_id, appln_filing_year, Y_tag), by = 'appln_id')
+data_pers_appln %<>% inner_join(data_appln %>% select(appln_id, appln_filing_year, Y_tag), by = 'appln_id')
 
 data_docdb_fam_cpc %<>% semi_join(data_appln, by = 'docdb_family_id')
-data_invt <- data_person %>% semi_join(data_invt_appln, by = 'person_id')
-data_tech_field %<>% semi_join(data_appln, by = 'appln_id')
+data_person %<>% semi_join(data_pers_appln, by = 'person_id')
+data_nace2 %<>% semi_join(data_appln, by = 'appln_id')
 ```
-
 ## Weight Persons
 
 ```{r}
-data_invt_appln  %<>%
+data_pers_appln  %<>%
   group_by(appln_id) %>%
   mutate(n_inv = n()) %>%
   ungroup() %>%
@@ -150,14 +131,33 @@ data_invt_appln  %<>%
 
 # Technology space (By technology classes)
 
+## NACE 
+
 ```{r}
-techn_field_names <- read_csv("../input/ipc_technology.csv") %>%
-  select(field_nr, sector, field_name) %>%
-  distinct(field_nr, .keep_all = TRUE) %>%
-  rename(techn_field_nr = field_nr,
-         techn_field_sector = sector,
-         techn_field_name = field_name) %>%
-  arrange(techn_field_nr) 
+list_nace2 <- read_csv("../input/list_nace2.csv") %>%
+  select(Level, Code, Description) %>%
+  rename(level = Level,
+         nace2_code = Code,
+         nace2_name = Description) %>%
+  mutate(nace_sec = ifelse(level == 1, nace2_code, NA),
+         nace_div = ifelse(level == 2, nace2_code, NA),
+         nace_group = ifelse(level == 3, nace2_code, NA),
+         nace_class = ifelse(level == 4, nace2_code, NA)) %>%
+  fill(nace_sec, nace_div, nace_group, nace_class, .direction = 'down') %>%
+    mutate(nace_sec_name = ifelse(level == 1, nace2_name, NA),
+         nace_div_name = ifelse(level == 2, nace2_name, NA),
+         nace_group_name = ifelse(level == 3, nace2_name, NA),
+         nace_class_name = ifelse(level == 4, nace2_name, NA)) %>%
+    fill(nace_sec_name, nace_div_name, nace_group_name, nace_class_name, .direction = 'down') 
+```
+
+
+```{r}
+data_nace2 %<>% 
+  mutate(nace_div = nace2_code %>% str_sub(1, 2),
+         nace_group = nace2_code %>% str_sub(1, 4),
+         nace_class = nace2_code %>% str_sub(1, 5)) %>%
+  left_join(list_nace2 %>% filter(level == 2) %>% select(nace_div, nace_sec), by = 'nace_div')
 ```
 
 ## Create Relatedness matrix
@@ -168,9 +168,9 @@ library(EconGeo)
 ```
 
 ```{r}
-mat_tech <- create_sparse_matrix(i = data_tech_field %>% pull(appln_id),
-                                       j = data_tech_field %>% pull(techn_field_nr),
-                                       weight = data_tech_field %>% pull(weight),
+mat_tech <- create_sparse_matrix(i = data_nace2 %>% pull(appln_id),
+                                       j = data_nace2 %>% pull(nace_group),
+                                       weight = data_nace2 %>% pull(weight),
                                        projection = 'j',
                                        sparse = FALSE)
 ```
@@ -188,11 +188,16 @@ library(ggraph)
 
 ```{r}
 g_tech <- mat_tech %>% as_tbl_graph(directed = FALSE) %N>%
-  left_join(techn_field_names %>% mutate(techn_field_nr = techn_field_nr %>% as.character()), by = c("name" = "techn_field_nr")) %>%
+  left_join(list_nace2 %>% filter(level == 3) %>% select(nace_group, nace_sec_name, nace_group_name), by = c('name' = 'nace_group')) %>%
   mutate(dgr = centrality_eigen(weights = weight)) %E>%
   filter(weight >= mean(weight))
 ```
 
+```{r}
+g_tech %N>% as_tibble() 
+```
+
+TODO: Repolace the NAs driven by categorization on class level
 
 
 ## Regional specialization
@@ -200,8 +205,8 @@ g_tech <- mat_tech %>% as_tbl_graph(directed = FALSE) %N>%
 ```{r}
 region_tech <- data_appln %>%
   select(appln_id, appln_filing_year, period, Y_tag) %>%
-  left_join(data_tech_field, by = 'appln_id') %>%
-  left_join(data_invt_appln %>% select(appln_id, person_id, nuts, n_inv), by = 'appln_id') %>%
+  left_join(data_nace2 %>% select(appln_id, nace_group, weight), by = 'appln_id') %>%
+  left_join(data_pers_appln %>% select(appln_id, person_id, nuts, n_inv), by = 'appln_id') %>%
   mutate(weight_frac = weight / n_inv)
 ```
 
@@ -209,9 +214,9 @@ region_tech <- data_appln %>%
 
 ```{r}
 region_RTA <- region_tech %>%  
-  drop_na(Y_tag, nuts, techn_field_nr, period) %>%
+  drop_na(Y_tag, nuts, nace_group, period) %>%
   # Summing weights of non-Y and Y tagged 
-  group_by(Y_tag, nuts, techn_field_nr, period) %>%
+  group_by(Y_tag, nuts, nace_group, period) %>%
   summarise(n_tech_region = sum(weight_frac, na.rm = TRUE)) %>%
   ungroup() %>%
   # Calculate location quotient
@@ -221,14 +226,14 @@ region_RTA <- region_tech %>%
   group_by(Y_tag, period, nuts) %>%
     mutate(n_region = sum(n_tech_region, na.rm = TRUE)) %>%
   ungroup() %>%
-  group_by(Y_tag, period, techn_field_nr) %>%
+  group_by(Y_tag, period, nace_group) %>%
     mutate(n_tech = sum(n_tech_region, na.rm = TRUE)) %>%
   ungroup() %>%
   mutate(rta = ((n_tech_region / n_region) / (n_tech / n)) %>% round(2),
          rta_bin = (rta >= 1) %>% as.numeric() ) %>%
   # Replace NAs
   replace_na(list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0)) %>%
-  complete(Y_tag, nuts, techn_field_nr, period, fill = list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0))
+  complete(Y_tag, nuts, nace_group, period, fill = list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0))
 ```
 <!---
 
@@ -280,11 +285,11 @@ tbl_applt <- tbl_person %>%
 # Regular tables
 data_appln %>% write_rds('../temp/data_appln.rds')
 
-data_invt %>% write_rds('../temp/data_invt.rds')
-data_invt_appln  %>% write_rds('../temp/data_invt_appln.rds')
+data_person %>% write_rds('../temp/data_person.rds')
+data_pers_appln  %>% write_rds('../temp/data_pers_appln.rds')
 
 data_docdb_fam_cpc %>% write_rds('../temp/data_docdb_fam_cpc.rds')
-data_tech_field %>% write_rds('../temp/data_tech_field.rds')
+data_nace2 %>% write_rds('../temp/data_nace2.rds')
 
 # Adittional ones
 g_tech %>% write_rds('../temp/g_tech.rds')
