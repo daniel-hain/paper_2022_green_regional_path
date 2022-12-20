@@ -278,9 +278,8 @@ tbl_applt <- tbl_person %>%
 # Save all
 
 ```{r}
-# SQL tables (Do that earlier.....)
-#tbl_applt %>% collect() %>% write_rds('../temp/data_applt.rds')
-#tbl_applt_appln_all %>% collect() %>% write_rds('../temp/data_applt_appln_all.rds')
+# Lists
+list_nace2 %>% write_rds('../temp/list_nace2.rds')
 
 # Regular tables
 data_appln %>% write_rds('../temp/data_appln.rds')
