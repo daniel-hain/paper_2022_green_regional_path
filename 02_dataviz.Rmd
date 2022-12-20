@@ -209,7 +209,7 @@ data_pers_appln %>%
        col = 'Nuts3')
 ```
 
-# Texnology space general
+# Technology space general
 
 * We calculate the relatedness of industries by co-occurence pattern following Hidalgo & Hausmann (2007)
 * Revealed technological advantage (RTA) Is sepperatedly calculated for Y-tag and non-Y-tag patents.
@@ -365,5 +365,8 @@ tech_rel_dev %>%
 * Label 2nd figure on green, label coinciding, maybe rta, share or growth
 * Do some radar plotting, eg: https://r-graph-gallery.com/web-circular-barplot-with-R-and-ggplot2.html 
 
+```{r}
+sessionInfo()
+```
 
 
