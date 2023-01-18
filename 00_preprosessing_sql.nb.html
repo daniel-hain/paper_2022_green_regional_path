@@ -2885,7 +2885,7 @@ border-radius: 0px;
 <h1 class="title toc-ignore">Green Regional Path paper: Preprocessing
 (SQL)</h1>
 <h4 class="author">Daniel S. Hain</h4>
-<h4 class="date">15 December, 2022</h4>
+<h4 class="date">17 January, 2023</h4>
 
 </div>
 
@@ -2916,15 +2916,15 @@ graphics.off()
 # Standard
 library(tidyverse) # General DS toolkit</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-output-begin eyJkYXRhIjoiUmVnaXN0ZXJlZCBTMyBtZXRob2RzIG92ZXJ3cml0dGVuIGJ5ICdkYnBseXInOlxuICBtZXRob2QgICAgICAgICBmcm9tXG4gIHByaW50LnRibF9sYXp5ICAgICBcbiAgcHJpbnQudGJsX3NxbCAgICAgIFxu4pSA4pSAIEF0dGFjaGluZyBwYWNrYWdlcyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgdGlkeXZlcnNlIDEuMy4yIOKUgOKUgOKclCBnZ3Bsb3QyIDMuNC4wICAgICAg4pyUIHB1cnJyICAgMC4zLjUgXG7inJQgdGliYmxlICAzLjEuOCAgICAgIOKclCBkcGx5ciAgIDEuMC4xMFxu4pyUIHRpZHlyICAgMS4yLjEgICAgICDinJQgc3RyaW5nciAxLjQuMSBcbuKclCByZWFkciAgIDIuMS4zICAgICAg4pyUIGZvcmNhdHMgMC41LjIg4pSA4pSAIENvbmZsaWN0cyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgdGlkeXZlcnNlX2NvbmZsaWN0cygpIOKUgOKUgFxu4pyWIGRwbHlyOjpmaWx0ZXIoKSBtYXNrcyBzdGF0czo6ZmlsdGVyKClcbuKcliBkcGx5cjo6bGFnKCkgICAgbWFza3Mgc3RhdHM6OmxhZygpXG4ifQ== -->
+<!-- rnb-output-begin eyJkYXRhIjoiUmVnaXN0ZXJlZCBTMyBtZXRob2RzIG92ZXJ3cml0dGVuIGJ5ICdkYnBseXInOlxuICBtZXRob2QgICAgICAgICBmcm9tXG4gIHByaW50LnRibF9sYXp5ICAgICBcbiAgcHJpbnQudGJsX3NxbCAgICAgIFxu4pSA4pSAIEF0dGFjaGluZyBwYWNrYWdlcyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgdGlkeXZlcnNlIDEuMy4yIOKUgOKUgOKclCBnZ3Bsb3QyIDMuNC4wICAgICAg4pyUIHB1cnJyICAgMC4zLjUgXG7inJQgdGliYmxlICAzLjEuOCAgICAgIOKclCBkcGx5ciAgIDEuMC4xMFxu4pyUIHRpZHlyICAgMS4yLjEgICAgICDinJQgc3RyaW5nciAxLjQuMSBcbuKclCByZWFkciAgIDIuMS4zICAgICAg4pyUIGZvcmNhdHMgMC41LjIg4pSA4pSAIENvbmZsaWN0cyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgdGlkeXZlcnNlX2NvbmZsaWN0cygpIOKUgOKUgFxu4pyWIGRwbHlyOjpmaWx0ZXIoKSBtYXNrcyBzdGF0czo6ZmlsdGVyKClcbuKcliBkcGx5cjo6bGFnKCkgICAgbWFza3Mgc3RhdHM6OmxhZygpXG4ifQ== -->
 <pre><code>Registered S3 methods overwritten by &#39;dbplyr&#39;:
   method         from
   print.tbl_lazy     
   print.tbl_sql      
-── Attaching packages ───────────────────────────────────────────────────────────────────────────── tidyverse 1.3.2 ──✔ ggplot2 3.4.0      ✔ purrr   0.3.5 
+── Attaching packages ────────────────────────────────────────────────────────────────────────────────────── tidyverse 1.3.2 ──✔ ggplot2 3.4.0      ✔ purrr   0.3.5 
 ✔ tibble  3.1.8      ✔ dplyr   1.0.10
 ✔ tidyr   1.2.1      ✔ stringr 1.4.1 
-✔ readr   2.1.3      ✔ forcats 0.5.2 ── Conflicts ──────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+✔ readr   2.1.3      ✔ forcats 0.5.2 ── Conflicts ───────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
 ✖ dplyr::filter() masks stats::filter()
 ✖ dplyr::lag()    masks stats::lag()</code></pre>
 <!-- rnb-output-end -->
@@ -3013,16 +3013,16 @@ rm(var_dbname, var_host, var_password, var_port, var_user)</code></pre>
 <h1><span class="header-section-number">2</span> Regions</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudGJsX2FwcGxuIDwtIHRibChjb24sICd0bHMyMDFfYXBwbG4nKVxudGJsX2FwcGxuX3ByaW9yIDwtIHRibChjb24sICd0bHMyMDRfYXBwbG5fcHJpb3InKVxudGJsX3BlcnNfYXBwbG4gPC0gdGJsKGNvbiwgJ3RsczIwN19wZXJzX2FwcGxuJykgXG50YmxfcGVyc29uIDwtIHRibChjb24sICd0bHMyMDZfcGVyc29uJylcbnRibF9hcHBsbl9jcGMgPC0gdGJsKGNvbiwgJ3RsczIyNF9hcHBsbl9jcGMnKVxudGJsX2RvY2RiX2ZhbV9jcGMgPC0gdGJsKGNvbiwgJ3RsczIyNV9kb2NkYl9mYW1fY3BjJylcbnRibF90ZWNoX2ZpZWxkIDwtIHRibChjb24sICd0bHMyMzBfYXBwbG5fdGVjaG5fZmllbGQnKVxudGJsX2FwcGxuX3ByaW9yIDwtIHRibChjb24sICd0bHMyMDRfYXBwbG5fcHJpb3InKVxudGJsX2FwcGxuX25hY2UyIDwtIHRibChjb24sICd0bHMyMjlfYXBwbG5fbmFjZTInKVxuYGBgIn0= -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudGJsX2FwcGxuIDwtIHRibChjb24sICd0bHMyMDFfYXBwbG4nKVxudGJsX2FwcGxuX3ByaW9yIDwtIHRibChjb24sICd0bHMyMDRfYXBwbG5fcHJpb3InKVxudGJsX3BlcnNfYXBwbG4gPC0gdGJsKGNvbiwgJ3RsczIwN19wZXJzX2FwcGxuJykgXG50YmxfcGVyc29uIDwtIHRibChjb24sICd0bHMyMDZfcGVyc29uJylcbnRibF9hcHBsbl9jcGMgPC0gdGJsKGNvbiwgJ3RsczIyNF9hcHBsbl9jcGMnKVxudGJsX2RvY2RiX2ZhbV9jcGMgPC0gdGJsKGNvbiwgJ3RsczIyNV9kb2NkYl9mYW1fY3BjJylcbnRibF9hcHBsbl9wcmlvciA8LSB0YmwoY29uLCAndGxzMjA0X2FwcGxuX3ByaW9yJylcbnRibF9hcHBsbl9uYWNlMiA8LSB0YmwoY29uLCAndGxzMjI5X2FwcGxuX25hY2UyJylcbiMgdGJsX3RlY2hfZmllbGQgPC0gdGJsKGNvbiwgJ3RsczIzMF9hcHBsbl90ZWNobl9maWVsZCcpXG5gYGAifQ== -->
 <pre class="r"><code>tbl_appln &lt;- tbl(con, &#39;tls201_appln&#39;)
 tbl_appln_prior &lt;- tbl(con, &#39;tls204_appln_prior&#39;)
 tbl_pers_appln &lt;- tbl(con, &#39;tls207_pers_appln&#39;) 
 tbl_person &lt;- tbl(con, &#39;tls206_person&#39;)
 tbl_appln_cpc &lt;- tbl(con, &#39;tls224_appln_cpc&#39;)
 tbl_docdb_fam_cpc &lt;- tbl(con, &#39;tls225_docdb_fam_cpc&#39;)
-tbl_tech_field &lt;- tbl(con, &#39;tls230_appln_techn_field&#39;)
 tbl_appln_prior &lt;- tbl(con, &#39;tls204_appln_prior&#39;)
-tbl_appln_nace2 &lt;- tbl(con, &#39;tls229_appln_nace2&#39;)</code></pre>
+tbl_appln_nace2 &lt;- tbl(con, &#39;tls229_appln_nace2&#39;)
+# tbl_tech_field &lt;- tbl(con, &#39;tls230_appln_techn_field&#39;)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
@@ -3046,22 +3046,21 @@ tbl_select_region &lt;- tbl(con, &#39;xtra_select_region&#39;)
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBJZGVudGlmeSBwZXJzb24tYXBwbGljYXRpb25zXG50YmxfcmVnaW9uX3BlcnNfYXBwbG4gPC0gdGJsX3BlcnNfYXBwbG4gJT4lXG4gIGZpbHRlcihpbnZ0X3NlcV9uciA+IDApICU+JVxuICBpbm5lcl9qb2luKHRibF9yZWdpb25fcGVyc29uICU+JSBzZWxlY3QocGVyc29uX2lkLCBwZXJzb25fY3RyeV9jb2RlLCBudXRzKSwgYnkgPSAncGVyc29uX2lkJykgJT4lXG4gIGNvbXB1dGUoKVxuYGBgIn0= -->
-<pre class="r"><code># Identify person-applications
-tbl_region_pers_appln &lt;- tbl_pers_appln %&gt;%
-  filter(invt_seq_nr &gt; 0) %&gt;%
-  inner_join(tbl_region_person %&gt;% select(person_id, person_ctry_code, nuts), by = &#39;person_id&#39;) %&gt;%
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBzZWxlY3QgcGVyc29ucyBpbiByZWdpb25zXG50YmxfcmVnaW9uX3BlcnNvbiA8LSB0YmxfcGVyc29uICU+JVxuICBmaWx0ZXIobnV0c19sZXZlbCA9PSAzKSAlPiVcbiAgc2VtaV9qb2luKHRibF9zZWxlY3RfcmVnaW9uLCBieSA9ICdwZXJzb25fY3RyeV9jb2RlJykgJT4lXG4gIGNvbXB1dGUoKVxuYGBgIn0= -->
+<pre class="r"><code># select persons in regions
+tbl_region_person &lt;- tbl_person %&gt;%
+  filter(nuts_level == 3) %&gt;%
+  semi_join(tbl_select_region, by = &#39;person_ctry_code&#39;) %&gt;%
   compute()</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBJZGVudGlmeSBwZXJzb24tYXBwbGljYXRpb25zXG50YmxfcmVnaW9uX3BlcnNfYXBwbG4gPC0gdGJsX3BlcnNfYXBwbG4gJT4lXG4gIGZpbHRlcihpbnZ0X3NlcV9uciA+IDApICU+JVxuICBpbm5lcl9qb2luKHRibF9yZWdpb25fcGVyc29uICU+JSBzZWxlY3QocGVyc29uX2lkLCBwZXJzb25fY3RyeV9jb2RlLCBudXRzKSwgYnkgPSAncGVyc29uX2lkJykgJT4lXG4gIGNvbXB1dGUoKVxuYGBgIn0= -->
-<pre class="r"><code># Identify person-applications
-tbl_region_pers_appln &lt;- tbl_pers_appln %&gt;%
-  filter(invt_seq_nr &gt; 0) %&gt;%
-  inner_join(tbl_region_person %&gt;% select(person_id, person_ctry_code, nuts), by = &#39;person_id&#39;) %&gt;%
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBVcGRhdGUgcGVyc29uIGRhdGFmcmFtZSBmb3Igb25seSBpbnZlbnRvcnNcbnRibF9yZWdpb25fcGVyc29uICAlPD4lXG4gIHNlbWlfam9pbih0YmxfcmVnaW9uX3BlcnNfYXBwbG4sIGJ5ID0gJ3BlcnNvbl9pZCcpICU+JVxuICBjb21wdXRlKClcbmBgYCJ9 -->
+<pre class="r"><code># Update person dataframe for only inventors
+tbl_region_person  %&lt;&gt;%
+  semi_join(tbl_region_pers_appln, by = &#39;person_id&#39;) %&gt;%
   compute()</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
@@ -3081,10 +3080,11 @@ tbl_region_appln &lt;- tbl_appln %&gt;%
 <h1><span class="header-section-number">3</span> Technologies</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBJZGVudGlmeSBhcHBsaWNhdGlvbnNcbnRibF9yZWdpb25fYXBwbG4gPC0gdGJsX2FwcGxuICU+JVxuICBzZW1pX2pvaW4odGJsX3JlZ2lvbl9wZXJzX2FwcGxuLCBieSA9ICdhcHBsbl9pZCcpICU+JVxuICBjb21wdXRlKClcbmBgYCJ9 -->
-<pre class="r"><code># Identify applications
-tbl_region_appln &lt;- tbl_appln %&gt;%
-  semi_join(tbl_region_pers_appln, by = &#39;appln_id&#39;) %&gt;%
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBGaWx0ZXIgQ1BDcyBpbiByZWdpb24gYW5kIGxhYmVsIFkwMiB0YWdzXG50YmxfcmVnaW9uX2RvY2RiX2ZhbV9jcGMgPC0gdGJsX2RvY2RiX2ZhbV9jcGMgJT4lXG4gIHNlbWlfam9pbih0YmxfcmVnaW9uX2FwcGxuLCBieSA9ICdkb2NkYl9mYW1pbHlfaWQnKSAlPiVcbiAgbXV0YXRlKFlfdGFnID0gY3BjX2NsYXNzX3N5bWJvbCAlbGlrZSUgJ1kwMiUnKSAlPiVcbiAgY29tcHV0ZSgpXG5gYGAifQ== -->
+<pre class="r"><code># Filter CPCs in region and label Y02 tags
+tbl_region_docdb_fam_cpc &lt;- tbl_docdb_fam_cpc %&gt;%
+  semi_join(tbl_region_appln, by = &#39;docdb_family_id&#39;) %&gt;%
+  mutate(Y_tag = cpc_class_symbol %like% &#39;Y02%&#39;) %&gt;%
   compute()</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
@@ -3119,10 +3119,10 @@ tbl_region_appln %&lt;&gt;%
 <!-- rnb-source-begin eyJkYXRhIjoiYGBgclxudGJsX3JlZ2lvbl9hcHBsbiAlPiUgY291bnQoWV90YWcpXG5gYGAifQ== -->
 <pre class="r"><code>tbl_region_appln %&gt;% count(Y_tag)</code></pre>
 <!-- rnb-source-end -->
-<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9QcUNvbm5lY3Rpb24iLCJ0YmxfZGJpIiwidGJsX3NxbCIsInRibF9sYXp5IiwidGJsIl0sIm5yb3ciOltdLCJuY29sIjoyLCJzdW1tYXJ5Ijp7IlNvdXJjZSI6WyJTUUwgWz8/IHggMl0iXSwiRGF0YWJhc2UiOlsicG9zdGdyZXMgIFtwYXRlbnRkYm93bmVyQDEzMC4yMjUuNTcuMTA1OjU0MzIvcGF0c3RhdDIwMjBdIl19fSwicmRmIjoiSDRzSUFBQUFBQUFBQTIxUVFXN0NNQkJjSnpGVkxCV1FlRWFWWEtncUhsRDFBUWdrT0NHVHVHblUxRWFPVVRseTVOV0VkV0lqWkhHSmQwZXprNWxaZm03bWJNTUFJSVlrSWhCVEhJR3VWMS9aQWhEQmhVQUNxWDFQU0pyaFlFSG1YdWdKRUkvdmUvUjJHZUFGQ1FSbzBmQzJ4V0g2QUthMU5LSVMrdU1kbDJ0d2tXcjFuMHYrSit6VnF4VS80NmZydXBCSVBXbmErM0RnZG1kNDVkM0w0U1RxQWdPczVJYm4zeG9GbmpoNFVRZFRLNG5Ta1kxT2cyT2lBMkJ5bE5aS21SVS9SL21ielYxVnhGVmxNNUR6d3p6VVpuK1plR1BVU1kyRXJHb3BmSmlHNzBYamxqSDIwaWZPRHhyNzgwa1FiWE9qRFBjOFZxakdJMzAydU40QVVPY1VsL0VCQUFBPSJ9 -->
+<!-- rnb-frame-begin eyJtZXRhZGF0YSI6eyJjbGFzc2VzIjpbInRibF9QcUNvbm5lY3Rpb24iLCJ0YmxfZGJpIiwidGJsX3NxbCIsInRibF9sYXp5IiwidGJsIl0sIm5yb3ciOltdLCJuY29sIjoyLCJzdW1tYXJ5Ijp7IlNvdXJjZSI6WyJTUUwgWz8/IHggMl0iXSwiRGF0YWJhc2UiOlsicG9zdGdyZXMgIFtwYXRlbnRkYm93bmVyQDEzMC4yMjUuNTcuMTA1OjU0MzIvcGF0c3RhdDIwMjBdIl19fSwicmRmIjoiSDRzSUFBQUFBQUFBQTIxUTBXckNNQlM5YVp0SkF6cGgzOUVxVTBUZnh6NWdiT0NlUmxaalY0eUpwSkh0MFMrM3UybVRJV0V2emIySGMwL1BPUzlQMndYYk1nQklJVXNJcEJSSG9HK3Z6OFVhRU1HRlFBYTVlMytROUlDREE1bC9vU2RBT3ZuYms1a2M0TTA4RXFDVjVHMkx3L1FHekJ0bFJTM01hb25MTmJySWpmNHVGVDhLZHpWMjRoZjhkRjBYRTJrZ1RYc2ZIbnovc0x3Tzd0VndrblNSQWJiamxwZDdnd0wvT0JqcGsyMjBRdW5FUmFmUk1URVJjSDlXenNxdXFMN082bEE4K3FxSXI4cGxJSmViZWFqTi9USUx4cWlYdWhPcWJwUUlZU1QvRk5JdkUreWxUMXllRFBZWGtpRGFsbFpiSG5pczBqSWdmVGE0L2dJL3VVM2E4UUVBQUE9PSJ9 -->
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
-{"columns":[{"label":["Y_tag"],"name":[1],"type":["lgl"],"align":["right"]},{"label":["n"],"name":[2],"type":["S3: integer64"],"align":["right"]}],"data":[{"1":"FALSE","2":"142216"},{"1":"TRUE","2":"14337"}],"options":{"columns":{"min":{},"max":[10],"total":[2]},"rows":{"min":[10],"max":[10],"total":["NA"]},"pages":{}}}
+{"columns":[{"label":["Y_tag"],"name":[1],"type":["lgl"],"align":["right"]},{"label":["n"],"name":[2],"type":["S3: integer64"],"align":["right"]}],"data":[{"1":"FALSE","2":"143212"},{"1":"TRUE","2":"14640"}],"options":{"columns":{"min":{},"max":[10],"total":[2]},"rows":{"min":[10],"max":[10],"total":["NA"]},"pages":{}}}
   </script>
 </div>
 <!-- rnb-frame-end -->
@@ -3166,13 +3166,18 @@ tbl_region_applt &lt;- tbl_person  %&gt;%
 <h1><span class="header-section-number">5</span> Save all</h1>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBOb3cgZ2V0IHRoZSBhcHBsaWNhbnRzIG9mIGFsbCB0aGUgYXBwbGNhdGlvbnNcblxuIyBJZGVudGlmeSBwZXJzb24tYXBwbGljYXRpb25zXG50YmxfcmVnaW9uX2FwcGx0X2FwcGxuIDwtIHRibF9wZXJzX2FwcGxuICU+JVxuICBmaWx0ZXIoYXBwbHRfc2VxX25yID4gMCkgJT4lXG4gIHNlbWlfam9pbih0YmxfcmVnaW9uX2FwcGxuLCBieSA9ICdhcHBsbl9pZCcpICU+JVxuICBjb21wdXRlKClcbmBgYCJ9 -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBOb3cgZ2V0IHRoZSBhcHBsaWNhbnRzIG9mIGFsbCB0aGUgYXBwbGNhdGlvbnNcblxuIyBJZGVudGlmeSBwZXJzb24tYXBwbGljYXRpb25zXG50YmxfcmVnaW9uX2FwcGx0X2FwcGxuIDwtIHRibF9wZXJzX2FwcGxuICU+JVxuICBmaWx0ZXIoYXBwbHRfc2VxX25yID4gMCkgJT4lXG4gIHNlbWlfam9pbih0YmxfcmVnaW9uX2FwcGxuLCBieSA9ICdhcHBsbl9pZCcpICU+JVxuICBjb21wdXRlKClcblxuIyBJZGVudGlmeSBhcHBsaWNhbnRzXG50YmxfcmVnaW9uX2FwcGx0IDwtIHRibF9wZXJzb24gICU+JVxuICBzZW1pX2pvaW4odGJsX3JlZ2lvbl9hcHBsdF9hcHBsbiwgYnkgPSAncGVyc29uX2lkJykgJT4lXG4gIGNvbXB1dGUoKVxuYGBgIn0= -->
 <pre class="r"><code># Now get the applicants of all the applcations
 
 # Identify person-applications
 tbl_region_applt_appln &lt;- tbl_pers_appln %&gt;%
   filter(applt_seq_nr &gt; 0) %&gt;%
   semi_join(tbl_region_appln, by = &#39;appln_id&#39;) %&gt;%
+  compute()
+
+# Identify applicants
+tbl_region_applt &lt;- tbl_person  %&gt;%
+  semi_join(tbl_region_applt_appln, by = &#39;person_id&#39;) %&gt;%
   compute()</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
@@ -3199,8 +3204,8 @@ tbl_region_appln_nace2 %&gt;% collect() %&gt;% write_rds(&#39;../temp/tbl_region
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuc2Vzc2lvbkluZm8oKVxuYGBgIn0= -->
-<pre class="r"><code>sessionInfo()</code></pre>
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuZGJEaXNjb25uZWN0KGNvbilcbmBgYCJ9 -->
+<pre class="r"><code>dbDisconnect(con)</code></pre>
 <!-- rnb-source-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->

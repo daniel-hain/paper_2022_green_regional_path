@@ -81,6 +81,15 @@ data_person <- read_rds('../temp/tbl_region_person.rds') %>% filter(nuts_level =
 data_nace2 <- read_rds('../temp/tbl_region_appln_nace2.rds') 
 ```
 
+```{r}
+data_appln %>% 
+  count(Y_tag, appln_filing_year) %>%
+  arrange(appln_filing_year, Y_tag) %>%
+  ggplot(aes(y = n, x =appln_filing_year, col = Y_tag)) +
+  geom_line()
+```
+
+
 # Initial data cleaning
 
 ## Restrict patent applications (families, years...)
@@ -119,6 +128,7 @@ data_docdb_fam_cpc %<>% semi_join(data_appln, by = 'docdb_family_id')
 data_person %<>% semi_join(data_pers_appln, by = 'person_id')
 data_nace2 %<>% semi_join(data_appln, by = 'appln_id')
 ```
+
 ## Weight Persons
 
 ```{r}
