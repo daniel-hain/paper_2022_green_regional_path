@@ -376,11 +376,10 @@ p1 <- tech_rel_dev %>%
   pivot_wider(names_from = Y_tag, values_from = rel, names_prefix = 'Y_', values_fill = 0) %>%
   left_join(tech_dev %>% 
               filter(Y_tag == TRUE, period == '2', rta_bin_delta == 1) %>% 
-              select(nuts, nace_group, n_tech_region) %>% 
               count(nuts, nace_group, wt = n_tech_region), 
             by = c('nuts', 'nace_group')) %>%
   mutate(country = nuts %>% str_sub(1,2)) %>%
-  left_join(list_nace2 %>%select(nace_group, nace_sec_name), by = 'nace_group')
+  left_join(list_nace2 %>%select(nace_group, nace_sec_name) %>% distinct(), by = 'nace_group')
 
 #x_mid <- mean(c(max(p1$Y_FALSE, na.rm = TRUE), 
 #                min(p1$Y_FALSE, na.rm = TRUE)))
@@ -395,7 +394,7 @@ y_mid <- mean(p1$Y_TRUE, na.rm = TRUE)
 p1 %>%
   ggplot(aes(x = Y_FALSE, y = Y_TRUE, size = n, col = nace_sec_name)) +
   geom_point() +
-  geom_text_repel(aes(label = nace_group), box.padding = 0.5) +
+  geom_text_repel(aes(label = nace_group), box.padding = 0.5, alpha = 0.5) +
   geom_vline(xintercept = x_mid, linetype = "dashed", color = 'grey') + 
   geom_hline(yintercept = y_mid, linetype = "dashed", color = 'grey') +
   facet_wrap(vars(nuts)) +
@@ -408,7 +407,6 @@ p1 %>%
 
 rm(p1, x_mid, y_mid)
 ```
-!!! CHeck labeling -> SE232
 !!! MAke additio nal ploty including old green specializations
 
 # Profiling regions
@@ -436,7 +434,8 @@ path_green_new <- tech_rel_dev %>%
 ```{r}
 path_green <- tech_dev %>% 
   mutate(green_path = case_when( 
-    Y_tag == TRUE & period == '2' & rta_bin == 1 & rta_bin_delta == 0 & n_tech_region_delta > 0 ~ 'extension',
+    Y_tag == TRUE & period == '2' & rta_bin == 1 & rta_bin_delta == 0 & pct_tech_region_delta < 0.1 ~ 'stagnation',
+    Y_tag == TRUE & period == '2' & rta_bin == 1 & rta_bin_delta == 0 & pct_tech_region_delta >= 0.1 ~ 'extension',
     Y_tag == TRUE & period == '2' & rta_bin == 0 & rta_bin_delta == -1 ~ 'extinction'
   )) %>%
   drop_na(green_path) %>%
@@ -458,7 +457,7 @@ path_green <- tech_dev %>%
 
 ```{r, fig.width=15, fig.height=15}
 path_green %>%
-  filter(nuts %in% select_region) %>%
+  filter(nuts %in% select_region, green_path != 'stagnation') %>%
   # split by inc and non_incumbents
   pivot_longer(c(n_new, n_inc), names_to = 'applt_type') %>% 
   # Aggregate
@@ -472,7 +471,9 @@ path_green %>%
   # Lollipop shaft 
   #geom_segment( aes(x = green_path, y = 0, xend = green_path, yend = 0.002), linetype = "dashed", color = "gray12") + 
   # coord_polar() +
-  facet_wrap(vars(nuts), ncol = n_regions, scales = 'free_y') +
+  # coord_flip() + 
+  facet_wrap(vars(nuts), ncol = n_regions, scales = 'free') +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) + 
   theme(legend.position = 'bottom') +
   labs(title = 'Radar Plot: Regional green paths', 
        subtitle = 'By nuts regions',
@@ -526,7 +527,17 @@ map_nordic %>%
        fill = 'Main green path') 
 ```
 
-Check Norway! and NUTS versions
+
+# Endnotes
+
+```{r}
+sessionInfo()
+```
+
+
+<!---
+
+DROPPED FOR NOW
 
 # Tech Space changes
 
@@ -580,46 +591,6 @@ g %>%
   labs(title = paste("Industry Space:", region, sep = " "),
        subtitle = 'Nodes = NACE 2 Industries. Edges: Relatedness',
        caption = '')
-```
-
-
-
-
-
-
-# Endnotes
-
-```{r}
-sessionInfo()
-```
-
-
-<!---
-
-DROPPED FOR NOW
-
-```{r}
-select_regions_green <- tech_dev %>%
-  group_by(nuts, period) %>%
-  summarise(green =  sum(Y_tag * rta, na.rm = TRUE),
-            green_bin =  sum(Y_tag * rta_bin, na.rm = TRUE),
-            n_tech_region =  sum(n_tech_region, na.rm = TRUE),
-            n_green_region =  sum(Y_tag * n_tech_region, na.rm = TRUE),
-            n_green_rta =  sum(Y_tag * n_tech_region * rta_bin, na.rm = TRUE)) %>%
-  ungroup() %>%
-  filter(n_green_rta >= n_cutoff,
-         green_bin >= 1,
-         period == '1') %>%
-  select(nuts)
-```
-
-```{r}
-tech_spec_dev <- tech_dev %>%
-  filter(n_tech_region >= n_cutoff_green) %>%
-  group_by(nuts, Y_tag) %>%
-  summarise(rta_delta = rta_delta %>% sum(na.rm = TRUE)) %>%
-  ungroup() %>%
-  pivot_wider(names_from = Y_tag, values_from = rta_delta, values_fill = 0, names_prefix = 'Y_spec_')
 ```
 
 --->
