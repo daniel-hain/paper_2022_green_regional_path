@@ -92,7 +92,7 @@ n_cutoff_green = 25
 ```{r}
 ## SELECT FOCUS REGIONS
 reg_in = '' # c('SE232', 'NO043', 'DK012')
-n_regions = 5
+n_regions = 5      
 
 # Restrict to top N regions
 select_region <- region_tech %>%
@@ -101,7 +101,7 @@ select_region <- region_tech %>%
             n_Y = sum(weight_frac * Y_tag, na.rm = TRUE)) %>%
   ungroup() %>%
   group_by(country) %>%
-  arrange(nuts, desc(n_Y)) %>%
+  arrange(desc(n_Y)) %>%
   mutate(index = 1:n()) %>%
   ungroup() %>%
   filter(index <= n_regions | nuts %in% reg_in) %>%
@@ -216,7 +216,7 @@ region_applt_appln %<>%
 ```{r}
 # List main applicants
 applt_stats <- region_applt_appln %>%
-  group_by(han_id, han_name, person_ctry_code, nuts) %>%
+  group_by(han_id, han_name) %>%
   summarise(
     n_pat = sum(n_frac),
     n_Y = sum(n_frac * Y_tag),
@@ -224,7 +224,7 @@ applt_stats <- region_applt_appln %>%
     ) %>%
   mutate(share_Y = n_Y / n_pat,
          age = 2016 - first_pat,
-         incumbant = age >= 10 & n_pat >= n_cutoff) %>%
+         incumbant = age >= 10 & n_pat >= 10) %>%
   ungroup() %>%
   arrange(desc(n_pat))
 ```
@@ -408,7 +408,8 @@ p1 %>%
 
 rm(p1, x_mid, y_mid)
 ```
-
+!!! CHeck labeling -> SE232
+!!! MAke additio nal ploty including old green specializations
 
 # Profiling regions
 
@@ -427,7 +428,7 @@ path_green_new <- tech_rel_dev %>%
     Y_FALSE <= mean(Y_FALSE) & Y_TRUE <= mean(Y_TRUE) ~ 'creation',
     Y_FALSE <= mean(Y_FALSE) & Y_TRUE > mean(Y_TRUE) ~ 'diversification',
     Y_FALSE > mean(Y_FALSE) & Y_TRUE <= mean(Y_TRUE) ~ 'renewal',
-    Y_FALSE > mean(Y_FALSE) & Y_TRUE > mean(Y_TRUE) ~ 'renew+div'
+    Y_FALSE > mean(Y_FALSE) & Y_TRUE > mean(Y_TRUE) ~ 'renewal'
     ) ) %>%
   select(-Y_FALSE, - Y_TRUE)
 ```
@@ -435,7 +436,7 @@ path_green_new <- tech_rel_dev %>%
 ```{r}
 path_green <- tech_dev %>% 
   mutate(green_path = case_when( 
-    Y_tag == TRUE & period == '2' & rta_bin == 1 & rta_bin_delta == 0 & rta_delta >= 0.1 ~ 'extension',
+    Y_tag == TRUE & period == '2' & rta_bin == 1 & rta_bin_delta == 0 & n_tech_region_delta > 0 ~ 'extension',
     Y_tag == TRUE & period == '2' & rta_bin == 0 & rta_bin_delta == -1 ~ 'extinction'
   )) %>%
   drop_na(green_path) %>%
@@ -464,16 +465,16 @@ path_green %>%
   count(nuts, green_path, applt_type, wt = value) %>%
   # Add overall patents andf make share
   left_join(region_RTA %>%filter(period == '2') %>%  count(nuts, wt = n_region, name = 'n_reg'), by = 'nuts') %>%
-  mutate(n_share = n / n_reg) %>%
+  mutate(n_share = n ) %>% #/ n_reg) %>%
   # plotting
   ggplot() +
   geom_col(aes(x = green_path, y = n_share, fill = applt_type, col = green_path), alpha = 0.8, position= "stack")  + 
   # Lollipop shaft 
-  geom_segment( aes(x = green_path, y = 0, xend = green_path, yend = 0.002), linetype = "dashed", color = "gray12") + 
-  coord_polar() +
-  facet_wrap(vars(nuts), ncol = n_regions) +
+  #geom_segment( aes(x = green_path, y = 0, xend = green_path, yend = 0.002), linetype = "dashed", color = "gray12") + 
+  # coord_polar() +
+  facet_wrap(vars(nuts), ncol = n_regions, scales = 'free_y') +
   theme(legend.position = 'bottom') +
-  labs(title = 'Radar PLot: Regional green paths', 
+  labs(title = 'Radar Plot: Regional green paths', 
        subtitle = 'By nuts regions',
        note = 'xxxx',
        x = NULL,
@@ -483,7 +484,7 @@ path_green %>%
        fill = 'Applicant type') 
 ```
 
-
+Break down main path industry
 
 # Geoplotting
 
@@ -494,7 +495,7 @@ path_green %>%
 # See: https://ropengov.github.io/giscoR/ 
 
 # Get map of nordics
-map_nordic <- gisco_get_nuts(country = c('DNK', 'SWE', 'NOR', 'FIN'), nuts_level = 3, year = '2021')
+map_nordic <- gisco_get_nuts(country = c('DNK', 'SWE', 'NOR', 'FIN'), nuts_level = 3, year = '2016')
 
 # filter out Svalbart etc
 map_nordic %<>%
@@ -524,6 +525,8 @@ map_nordic %>%
        y = NULL,
        fill = 'Main green path') 
 ```
+
+Check Norway! and NUTS versions
 
 # Tech Space changes
 
