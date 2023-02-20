@@ -105,6 +105,10 @@ tbl_region_person <- tbl_person %>%
 # Identify person-applications
 tbl_region_pers_appln <- tbl_pers_appln %>%
   filter(invt_seq_nr > 0) %>%
+  group_by(appln_id) %>%
+  mutate(n_inv = n()) %>%
+  ungroup() %>%
+  mutate(weight_frac = 1/n_inv) %>%
   inner_join(tbl_region_person %>% select(person_id, person_ctry_code, nuts), by = 'person_id') %>%
   compute()
 ```
@@ -129,7 +133,8 @@ tbl_region_appln <- tbl_appln %>%
 # Filter CPCs in region and label Y02 tags
 tbl_region_docdb_fam_cpc <- tbl_docdb_fam_cpc %>%
   semi_join(tbl_region_appln, by = 'docdb_family_id') %>%
-  mutate(Y_tag = cpc_class_symbol %like% 'Y02%') %>%
+  distinct(docdb_family_id, cpc_class_symbol) %>%
+  mutate(Y_tag = (cpc_class_symbol %like% 'Y02%') | (cpc_class_symbol %like% 'Y04S%')) %>%
   compute()
 ```
 
@@ -172,6 +177,10 @@ Note: Not applicants from the region, but applicants that have inventors in the 
 # Identify person-applications
 tbl_region_applt_appln <- tbl_pers_appln %>%
   filter(applt_seq_nr > 0) %>%
+  group_by(appln_id) %>%
+  mutate(n_applt = n()) %>%
+  ungroup() %>%
+  mutate(weight_frac = 1/n_applt) %>%
   semi_join(tbl_region_appln, by = 'appln_id') %>%
   compute()
 

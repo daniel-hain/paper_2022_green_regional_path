@@ -59,9 +59,9 @@ library(sf)
 data_appln <- read_rds('../temp/data_appln.rds')
 data_pers_appln  <- read_rds('../temp/data_pers_appln.rds')
 data_nace2 <- read_rds('../temp/data_nace2.rds')
-
+data_docdb_fam_cpc <- read_rds('../temp/data_docdb_fam_cpc.rds')
 #data_person <- read_rds('../temp/data_person.rds')
-#data_docdb_fam_cpc <- read_rds('../temp/data_docdb_fam_cpc.rds')
+
 
 # Regional specialization
 region_RTA <- read_rds('../temp/region_RTA.rds') %>% 
@@ -490,7 +490,7 @@ Break down main path industry
 # Geoplotting
 
 * I also added a first plotting of main green paths
-* Works well, so we can adsd furthr geoplots if necessary.
+* Works well, so we can adds furthr geoplots if necessary.
 
 ```{r}
 # See: https://ropengov.github.io/giscoR/ 
@@ -521,7 +521,7 @@ map_nordic %>%
   theme_void() +
   labs(title = 'Map: Nordic main green paths', 
        subtitle = 'By nuts regions',
-       note = 'xxxx',
+       note = 'Excluding NO0B1,NO0B2',
        x = NULL,
        y = NULL,
        fill = 'Main green path') 

@@ -63,10 +63,16 @@ rm(var_dbname, var_host, var_password, var_port, var_user)
 # con %>% dbListTables() %>% sort()
 ```
 
+```{r}
+tbl_nuts <- tbl(con, 'tls904_nuts')
+#tbl(con, 'tls902_ipc_nace2') #  TODO: CHeck why not included in our PATSTAT
+```
+
+
 # Defining parameters
 
 ```{r}
-var_t_start <- 1990
+var_t_start <- 1985
 var_t_end <- 2015
 var_t_break <- 2000
 ```
@@ -75,10 +81,12 @@ var_t_break <- 2000
 
 ```{r}
 data_appln <- read_rds('../temp/tbl_region_appln.rds')
+
 data_docdb_fam_cpc <- read_rds('../temp/tbl_region_docdb_fam_cpc.rds')
+data_nace2 <- read_rds('../temp/tbl_region_appln_nace2.rds') 
+
 data_pers_appln <- read_rds('../temp/tbl_region_pers_appln.rds')
 data_person <- read_rds('../temp/tbl_region_person.rds') %>% filter(nuts_level == 3)
-data_nace2 <- read_rds('../temp/tbl_region_appln_nace2.rds') 
 ```
 
 ```{r}
@@ -97,9 +105,9 @@ data_appln %>%
 ```{r}
 # Limit timeframe,
 data_appln %<>%
-  # filter(granted == 'Y') %>% # only granted patents
-  filter(appln_filing_year >= var_t_start,
-         appln_filing_year <= var_t_end) 
+  filter(granted == 'Y') #%>% # only granted patents
+  #filter(appln_filing_year >= var_t_start,
+        # appln_filing_year <= var_t_end) 
 ```
 
 
@@ -123,21 +131,12 @@ data_appln %<>%
 
 ```{r}
 data_pers_appln %<>% inner_join(data_appln %>% select(appln_id, appln_filing_year, Y_tag), by = 'appln_id')
+data_person %<>% semi_join(data_pers_appln, by = 'person_id')
 
 data_docdb_fam_cpc %<>% semi_join(data_appln, by = 'docdb_family_id')
-data_person %<>% semi_join(data_pers_appln, by = 'person_id')
 data_nace2 %<>% semi_join(data_appln, by = 'appln_id')
 ```
 
-## Weight Persons
-
-```{r}
-data_pers_appln  %<>%
-  group_by(appln_id) %>%
-  mutate(n_inv = n()) %>%
-  ungroup() %>%
-  mutate(weight_frac = 1/n_inv) 
-```
 
 # Technology space (By technology classes)
 
