@@ -2885,7 +2885,7 @@ border-radius: 0px;
 <h1 class="title toc-ignore">Green Regional Path paper: Preprocessing
 (SQL)</h1>
 <h4 class="author">Daniel S. Hain</h4>
-<h4 class="date">20 February, 2023</h4>
+<h4 class="date">20 March, 2023</h4>
 
 </div>
 
@@ -2900,33 +2900,56 @@ border-radius: 0px;
 database</h3>
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBOb3Qgc3VyZSBpZiBuZWNlc3NhcnkuLi4gd2FzIGFuIGlzc3VlIHdpdGggYSB2ZXJzaW9uIGNvbmZsaWN0Li4uIHRyeSBuZXcgdmVyc2lvbiBpbiB0aGUgZnV0dXJlIGFnYWluLi4uXG4jIGRldnRvb2xzOjppbnN0YWxsX3ZlcnNpb24oXCJSUG9zdGdyZXNcIiwgdmVyc2lvbiA9IFwiMS4yLjFcIiwgcmVwb3MgPSBcImh0dHA6Ly9jcmFuLnVzLnItcHJvamVjdC5vcmdcIilcblxuIyMjIGdlbmVyYWwgb3B0aW9uc1xuU3lzLnNldGVudihMQU5HID0gXCJlblwiKVxub3B0aW9ucyhcInNjaXBlblwiID0gMTAwLCBcImRpZ2l0c1wiID0gNCkgIyBvdmVycmlkZSBSJ3MgdGVuZGVuY3kgdG8gdXNlIHNjaWVudGlmaWMgbm90YXRpb25cblxuIyMjIENsZWFuIHdvcmtzcGFjZVxucm0obGlzdD1scygpKVxuZ3JhcGhpY3Mub2ZmKClcblxuIyMjIExvYWQgcGFja2FnZXMgKG1heWJlIG5lZWQgdG8gYmUgaW5zdGFsbGVkIGZpcnN0KVxuIyBTdGFuZGFyZFxubGlicmFyeSh0aWR5dmVyc2UpICMgR2VuZXJhbCBEUyB0b29sa2l0XG5saWJyYXJ5KG1hZ3JpdHRyKSAjIEZvciBhZHZhbmNlZCBwaXBpbmdcblxuIyBEYXRhYmFzZXNcbmxpYnJhcnkoREJJKSAjIEdFbmVyYWwgUiBkYXRhYmFzZSBpbnRlcmZhY2VcbmxpYnJhcnkoUlBvc3RncmVzKSAjIFBvc3RncmVTUUwgaW50ZXJmYWNlIGRyaXZlciBcbmxpYnJhcnkoZGJwbHlyKSAjIGZvciBkcGx5ciB3aXRoIGRhdGFiYXNlc1xuYGBgIn0= -->
-<pre class="r"><code># Not sure if necessary... was an issue with a version conflict... try new version in the future again...
-# devtools::install_version(&quot;RPostgres&quot;, version = &quot;1.2.1&quot;, repos = &quot;http://cran.us.r-project.org&quot;)
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeSh0aWR5dmVyc2UpICMgR2VuZXJhbCBEUyB0b29sa2l0XG5cbmBgYCJ9 -->
+<pre class="r"><code>library(tidyverse) # General DS toolkit
+</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiUmVnaXN0ZXJlZCBTMyBtZXRob2RzIG92ZXJ3cml0dGVuIGJ5ICdkYnBseXInOlxuICBtZXRob2QgICAgICAgICBmcm9tXG4gIHByaW50LnRibF9sYXp5ICAgICBcbiAgcHJpbnQudGJsX3NxbCAgICAgIFxu4pSA4pSAIEF0dGFjaGluZyBwYWNrYWdlcyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgdGlkeXZlcnNlIDEuMy4yIOKUgOKUgOKclCBnZ3Bsb3QyIDMuNC4wICAgICAg4pyUIHB1cnJyICAgMS4wLjEgXG7inJQgdGliYmxlICAzLjEuOCAgICAgIOKclCBkcGx5ciAgIDEuMC4xMFxu4pyUIHRpZHlyICAgMS4yLjEgICAgICDinJQgc3RyaW5nciAxLjUuMCBcbuKclCByZWFkciAgIDIuMS4zICAgICAg4pyUIGZvcmNhdHMgMC41LjIg4pSA4pSAIENvbmZsaWN0cyDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAgdGlkeXZlcnNlX2NvbmZsaWN0cygpIOKUgOKUgFxu4pyWIGRwbHlyOjpmaWx0ZXIoKSBtYXNrcyBzdGF0czo6ZmlsdGVyKClcbuKcliBkcGx5cjo6bGFnKCkgICAgbWFza3Mgc3RhdHM6OmxhZygpXG4ifQ== -->
+<pre><code>Registered S3 methods overwritten by &#39;dbplyr&#39;:
+  method         from
+  print.tbl_lazy     
+  print.tbl_sql      
+── Attaching packages ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse 1.3.2 ──✔ ggplot2 3.4.0      ✔ purrr   1.0.1 
+✔ tibble  3.1.8      ✔ dplyr   1.0.10
+✔ tidyr   1.2.1      ✔ stringr 1.5.0 
+✔ readr   2.1.3      ✔ forcats 0.5.2 ── Conflicts ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxubGlicmFyeShtYWdyaXR0cikgIyBGb3IgYWR2YW5jZWQgcGlwaW5nXG5gYGAifQ== -->
+<pre class="r"><code>library(magrittr) # For advanced piping</code></pre>
+<!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYbWFncml0dHLigJlcblxuVGhlIGZvbGxvd2luZyBvYmplY3QgaXMgbWFza2VkIGZyb20g4oCYcGFja2FnZTpwdXJycuKAmTpcblxuICAgIHNldF9uYW1lc1xuXG5UaGUgZm9sbG93aW5nIG9iamVjdCBpcyBtYXNrZWQgZnJvbSDigJhwYWNrYWdlOnRpZHly4oCZOlxuXG4gICAgZXh0cmFjdFxuIn0= -->
+<pre><code>
+Attaching package: ‘magrittr’
 
-### general options
-Sys.setenv(LANG = &quot;en&quot;)
-options(&quot;scipen&quot; = 100, &quot;digits&quot; = 4) # override R&#39;s tendency to use scientific notation
+The following object is masked from ‘package:purrr’:
 
-### Clean workspace
-rm(list=ls())
-graphics.off()
+    set_names
 
-### Load packages (maybe need to be installed first)
-# Standard
-library(tidyverse) # General DS toolkit
-library(magrittr) # For advanced piping
+The following object is masked from ‘package:tidyr’:
 
-# Databases
+    extract</code></pre>
+<!-- rnb-output-end -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBEYXRhYmFzZXNcbmxpYnJhcnkoREJJKSAjIEdFbmVyYWwgUiBkYXRhYmFzZSBpbnRlcmZhY2VcbmxpYnJhcnkoUlBvc3RncmVzKSAjIFBvc3RncmVTUUwgaW50ZXJmYWNlIGRyaXZlciBcbmxpYnJhcnkoZGJwbHlyKSAjIGZvciBkcGx5ciB3aXRoIGRhdGFiYXNlc1xuYGBgIn0= -->
+<pre class="r"><code># Databases
 library(DBI) # GEneral R database interface
 library(RPostgres) # PostgreSQL interface driver 
 library(dbplyr) # for dplyr with databases</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiXG5BdHRhY2hpbmcgcGFja2FnZTog4oCYZGJwbHly4oCZXG5cblRoZSBmb2xsb3dpbmcgb2JqZWN0cyBhcmUgbWFza2VkIGZyb20g4oCYcGFja2FnZTpkcGx5cuKAmTpcblxuICAgIGlkZW50LCBzcWxcbiJ9 -->
+<pre><code>
+Attaching package: ‘dbplyr’
+
+The following objects are masked from ‘package:dplyr’:
+
+    ident, sql</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 <!-- rnb-text-end -->
 <!-- rnb-chunk-begin -->
-<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBMb2FkIHNjcmlwdCB3aXRoIHZhcmlhYmxlc1xuc291cmNlKFwiLi4vdmFyaWFibGVzLlJcIilcblxuIyBzZXQgdXAgY29ubmVjdGlvbiB0byBleGlzdGluZyBQb3N0Z3JlU1FMIGRhdGFiYXNlLCBqdXN0IHBsdWcgaW4gb3duIGRldGFpbHNcbmNvbiA8LSBkYkNvbm5lY3QoZHJ2ID0gUlBvc3RncmVzOjpQb3N0Z3JlcygpLCBcbiAgICAgICAgICAgICAgICAgZGJuYW1lID0gdmFyX2RibmFtZSxcbiAgICAgICAgICAgICAgICAgaG9zdCA9IHZhcl9ob3N0LCBcbiAgICAgICAgICAgICAgICAgcG9ydCA9IHZhcl9wb3J0LFxuICAgICAgICAgICAgICAgICB1c2VyID0gdmFyX3VzZXIsIFxuICAgICAgICAgICAgICAgICBwYXNzd29yZCA9IHZhcl9wYXNzd29yZCxcbiAgICAgICAgICAgICAgICAgc3NsbW9kZSA9ICdyZXF1aXJlJ1xuICAgICAgICAgICAgICAgICApXG5cbnJtKHZhcl9kYm5hbWUsIHZhcl9ob3N0LCB2YXJfcGFzc3dvcmQsIHZhcl9wb3J0LCB2YXJfdXNlcilcbmBgYCJ9 -->
+<!-- rnb-source-begin eyJkYXRhIjoiYGBgclxuIyBMb2FkIHNjcmlwdCB3aXRoIHZhcmlhYmxlc1xuc291cmNlKFwiLi4vdmFyaWFibGVzLlJcIilcblxuIyBzZXQgdXAgY29ubmVjdGlvbiB0byBleGlzdGluZyBQb3N0Z3JlU1FMIGRhdGFiYXNlLCBqdXN0IHBsdWcgaW4gb3duIGRldGFpbHNcbmNvbiA8LSBkYkNvbm5lY3QoZHJ2ID0gUlBvc3RncmVzOjpQb3N0Z3JlcygpLCBcbiAgICAgICAgICAgICAgICAgZGJuYW1lID0gdmFyX2RibmFtZSxcbiAgICAgICAgICAgICAgICAgaG9zdCA9IHZhcl9ob3N0LCBcbiAgICAgICAgICAgICAgICAgcG9ydCA9IHZhcl9wb3J0LFxuICAgICAgICAgICAgICAgICB1c2VyID0gdmFyX3VzZXIsIFxuICAgICAgICAgICAgICAgICBwYXNzd29yZCA9IHZhcl9wYXNzd29yZCxcbiAgICAgICAgICAgICAgICAgc3NsbW9kZSA9ICdyZXF1aXJlJ1xuICAgICAgICAgICAgICAgICApXG5gYGAifQ== -->
 <pre class="r"><code># Load script with variables
 source(&quot;../variables.R&quot;)
 
@@ -2938,10 +2961,13 @@ con &lt;- dbConnect(drv = RPostgres::Postgres(),
                  user = var_user, 
                  password = var_password,
                  sslmode = &#39;require&#39;
-                 )
-
-rm(var_dbname, var_host, var_password, var_port, var_user)</code></pre>
+                 )</code></pre>
 <!-- rnb-source-end -->
+<!-- rnb-output-begin eyJkYXRhIjoiRXJyb3I6IGNvdWxkIG5vdCBjb25uZWN0IHRvIHNlcnZlcjogT3BlcmF0aW9uIHRpbWVkIG91dFxuXHRJcyB0aGUgc2VydmVyIHJ1bm5pbmcgb24gaG9zdCBcIjEzMC4yMjUuNTcuMTA1XCIgYW5kIGFjY2VwdGluZ1xuXHRUQ1AvSVAgY29ubmVjdGlvbnMgb24gcG9ydCA1NDMyP1xuIn0= -->
+<pre><code>Error: could not connect to server: Operation timed out
+    Is the server running on host &quot;130.225.57.105&quot; and accepting
+    TCP/IP connections on port 5432?</code></pre>
+<!-- rnb-output-end -->
 <!-- rnb-chunk-end -->
 <!-- rnb-text-begin -->
 </div>
