@@ -558,7 +558,7 @@ country_lines <- map_nordic %>%
   st_cast("MULTILINESTRING")
 ```
 
-```{r, fig.width=10, fig.height=10}
+```{r, fig.width=8.5, fig.height=7.5}
 map_nordic %>%
   # enter main green path
   left_join(path_green %>% count(nuts, green_path, wt = n) %>% group_by(nuts) %>% slice_max(order_by = n, n = 1, with_ties = FALSE) %>% ungroup(), by = c('NUTS_ID' = 'nuts')) %>%
@@ -587,11 +587,6 @@ tab_1 <- tech_dev %>%
   mutate(Y_FALSE = round(Y_FALSE), Y_TRUE = round(Y_TRUE),
          Y_share = (Y_TRUE / (Y_FALSE + Y_TRUE)  ) %>% round(2)  )
 
-tab_1
-```
-
-
-```{r}
 tab_2 <- region_applt_appln %>%
   filter(period == 2) %>%
   count(nuts, han_name, han_id, Y_tag, wt = n_frac) %>%
@@ -605,12 +600,6 @@ tab_2 <- region_applt_appln %>%
   mutate(applicant = paste0(han_name, ' (',incumbant ,', n green: ', Y_TRUE, ', share:', Y_share, ')')) %>%
   select(nuts, applicant)
 
-tab_2
-```
-
-
-
-```{r}
 tab_3 <- path_green %>%
   count(nuts, green_path, wt = n) %>%
   group_by(nuts) %>%
@@ -620,10 +609,6 @@ tab_3 <- path_green %>%
   pivot_wider(names_from = green_path, values_from = share, names_prefix= '% path ', values_fill = 0) %>%
   arrange(nuts)
 
-tab_3
-```
-
-```{r}
 tab_all <- tab_1 %>%
   left_join(tab_2, by = 'nuts') %>%
   left_join(tab_3, by = 'nuts')
@@ -631,15 +616,15 @@ tab_all <- tab_1 %>%
 tab_all
 ```
 
-
-
-```{r, results='asis'}
-library(stargazer)
-tab_all %>% stargazer(summary = FALSE, type = 'html')
+```{r}
+tab_all %>% write_csv('../output/table_regions_csv')
 ```
 
 
-
+```{r, results='asis'}
+#library(stargazer)
+#tab_all %>% stargazer(summary = FALSE, type = 'html')
+```
 
 
 # Endnotes
