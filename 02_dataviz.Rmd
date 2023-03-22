@@ -351,6 +351,8 @@ rm(p1, p2)
 
 # Analysis for existing green paths:
 
+NOTE: new patentds in specializations? 
+
 ```{r}
 tech_rel_dev <- tech_rel %>% 
   select(from, to, weight) %>%
@@ -375,7 +377,7 @@ p1 <- tech_rel_dev %>%
   ungroup() %>%
   #
   pivot_wider(names_from = Y_tag, values_from = rel, names_prefix = 'Y_', values_fill = 0) %>%
-  left_join(tech_dev %>% filter(Y_tag == TRUE, period == '2', rta_bin == 1) %>% select(nuts , n_tech_region) %>% count(nuts, wt = n_tech_region), by = c('nuts')) %>%
+  left_join(tech_dev %>% filter(Y_tag == TRUE, period == '2', rta_bin_delta == 1) %>% select(nuts , n_tech_region) %>% count(nuts, wt = n_tech_region), by = c('nuts')) %>%
   mutate(country = nuts %>% str_sub(1,2)) 
 
 x_mid <- mean(p1$Y_FALSE, na.rm = TRUE)
@@ -405,7 +407,13 @@ library(regions)
 data(nuts_changes)
 list_nuts <- nuts_changes %>% select(code_2021, geo_name_2021) 
 colnames(list_nuts) <- c('nuts', 'nuts_name')
-# TODO: Include NO names by hand
+
+list_nuts_add <- tibble(
+  nuts = c('NO011', 'NO012', 'NO043', 'NO061'),
+  nuts_name = c('Oslo', 'Akerhus', 'Rogoland', 'Sør-Trøndelag')
+)
+
+list_nuts %<>% bind_rows(list_nuts_add)
 ```
 
 
@@ -525,7 +533,6 @@ path_green %>%
         legend.box = "vertical") +
   labs(title = 'Regional green paths', 
        subtitle = 'By nuts regions',
-       note = 'xxxx',
        x = NULL,
        y = NULL,
        size = 'Share green patents',
@@ -581,11 +588,13 @@ All green paths
 
 ```{r}
 tab_1 <- tech_dev %>%
-  filter(period == 2) %>%
+  filter(period == 2) %>% 
   count(nuts, Y_tag, wt = n_tech_region) %>%
   pivot_wider(names_from = Y_tag, values_from = n, values_fill = 0, names_prefix = 'Y_') %>%
   mutate(Y_FALSE = round(Y_FALSE), Y_TRUE = round(Y_TRUE),
-         Y_share = (Y_TRUE / (Y_FALSE + Y_TRUE)  ) %>% round(2)  )
+         Y_share = (Y_TRUE / (Y_FALSE + Y_TRUE)  ) %>% round(2)  ) %>%
+  left_join(list_nuts %>% distinct(), by = 'nuts') %>% mutate(nuts_name = paste(nuts, nuts_name, sep = ': ') ) %>%
+  relocate(nuts_name)
 
 tab_2 <- region_applt_appln %>%
   filter(period == 2) %>%
@@ -611,13 +620,14 @@ tab_3 <- path_green %>%
 
 tab_all <- tab_1 %>%
   left_join(tab_2, by = 'nuts') %>%
-  left_join(tab_3, by = 'nuts')
+  left_join(tab_3, by = 'nuts') %>%
+  select(-nuts)
 
 tab_all
 ```
 
 ```{r}
-tab_all %>% write_csv('../output/table_regions_csv')
+tab_all %>% write_csv('../output/table_regions.csv')
 ```
 
 

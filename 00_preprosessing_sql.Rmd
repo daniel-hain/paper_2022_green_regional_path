@@ -170,6 +170,7 @@ tbl_region_appln_nace2 <- tbl_appln_nace2 %>%
 # Applicants
 
 Note: Not applicants from the region, but applicants that have inventors in the region
+Note: Applicants patents to region via inventor
 
 ```{r}
 # Now get the applicants of all the applcations
