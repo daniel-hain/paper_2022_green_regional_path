@@ -409,8 +409,8 @@ list_nuts <- nuts_changes %>% select(code_2021, geo_name_2021)
 colnames(list_nuts) <- c('nuts', 'nuts_name')
 
 list_nuts_add <- tibble(
-  nuts = c('NO011', 'NO012', 'NO043', 'NO061'),
-  nuts_name = c('Oslo', 'Akerhus', 'Rogoland', 'Sør-Trøndelag')
+  nuts = c('NO011', 'NO012', 'NO021', 'NO022', 'NO031', 'NO032', 'NO033', 'NO034', 'NO041', 'NO042', 'NO043', 'NO051', 'NO052', 'NO053', 'NO061', 'NO062', 'NO071', 'NO072', 'NO073'),
+  nuts_name = c('Oslo', 'Akershus', 'Hedmark', 'Oppland', 'Østfold', 'Buskerud', 'Vestfold', 'Telemark', 'Aust-Agder', 'Vest-Agder', 'Rogaland', 'Hordaland', 'Sogn og Fjordane', 'Møre og Romsdal', 'Sør-Trøndelag', 'Nord-Trøndelag', 'Nordland', 'Troms', 'Finnmark')
 )
 
 list_nuts %<>% bind_rows(list_nuts_add)
@@ -584,10 +584,9 @@ map_nordic %>%
 
 # Tables
 
-All green paths
-
 ```{r}
-tab_1 <- tech_dev %>%
+# Basics Nr patents
+tab_basic <- tech_dev %>%
   filter(period == 2) %>% 
   count(nuts, Y_tag, wt = n_tech_region) %>%
   pivot_wider(names_from = Y_tag, values_from = n, values_fill = 0, names_prefix = 'Y_') %>%
@@ -596,9 +595,13 @@ tab_1 <- tech_dev %>%
   left_join(list_nuts %>% distinct(), by = 'nuts') %>% mutate(nuts_name = paste(nuts, nuts_name, sep = ': ') ) %>%
   relocate(nuts_name)
 
-tab_2 <- region_applt_appln %>%
+# Applicant 
+tab_applt <- region_applt_appln %>%
+  rename(weight_applt = weight_frac) %>%
   filter(period == 2) %>%
-  count(nuts, han_name, han_id, Y_tag, wt = n_frac) %>%
+  left_join(region_tech %>% select(appln_id, nuts, weight) %>% rename(weight_invt = weight), by = c('appln_id', 'nuts')) %>%
+  mutate(weight_all = weight_applt * weight_invt) %>%
+  count(nuts, han_name, han_id, Y_tag, wt = weight_all) %>%
   pivot_wider(names_from = Y_tag, values_from = n, values_fill = 0, names_prefix = 'Y_') %>%
   mutate(Y_FALSE = round(Y_FALSE), Y_TRUE = round(Y_TRUE),
          Y_share = (Y_TRUE / (Y_FALSE + Y_TRUE)  ) %>% round(2)) %>% 
@@ -609,7 +612,7 @@ tab_2 <- region_applt_appln %>%
   mutate(applicant = paste0(han_name, ' (',incumbant ,', n green: ', Y_TRUE, ', share:', Y_share, ')')) %>%
   select(nuts, applicant)
 
-tab_3 <- path_green %>%
+tab_path_rel <- path_green %>%
   count(nuts, green_path, wt = n) %>%
   group_by(nuts) %>%
   mutate(share = (n / sum(n)) %>% round(2) ) %>%
@@ -618,9 +621,15 @@ tab_3 <- path_green %>%
   pivot_wider(names_from = green_path, values_from = share, names_prefix= '% path ', values_fill = 0) %>%
   arrange(nuts)
 
-tab_all <- tab_1 %>%
-  left_join(tab_2, by = 'nuts') %>%
-  left_join(tab_3, by = 'nuts') %>%
+tab_path_total <- path_green %>%
+  count(nuts, green_path, wt = n) %>%
+  pivot_wider(names_from = green_path, values_from = n, names_prefix= 'n path ', values_fill = 0) %>%
+  arrange(nuts)
+
+tab_all <- tab_basic %>%
+  left_join(tab_applt, by = 'nuts') %>%
+  left_join(tab_path_rel, by = 'nuts') %>%
+  #left_join(tab_path_total, by = 'nuts') %>%
   select(-nuts)
 
 tab_all
