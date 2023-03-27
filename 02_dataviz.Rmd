@@ -654,13 +654,14 @@ tab_path_rel <- path_green %>%
 
 tab_path_total <- path_green %>%
   count(nuts, green_path, wt = n) %>%
+  mutate(n = n %>% round()) %>%
   pivot_wider(names_from = green_path, values_from = n, names_prefix= 'n path ', values_fill = 0) %>%
   arrange(nuts)
 ```
 
 ```{r}
 tab_all <- tab_basic %>%
-  left_join(tab_nace, by = 'nuts') %>%  
+  left_join(tab_cpc_Y, by = 'nuts') %>%  
   left_join(tab_nace, by = 'nuts') %>%  
   left_join(tab_applt, by = 'nuts') %>%
   left_join(tab_path_rel, by = 'nuts') %>%
