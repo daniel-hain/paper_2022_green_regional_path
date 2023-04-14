@@ -175,6 +175,7 @@ tech_dev <- region_RTA %>%
 
 ```{r}
 data_appln %>%
+  mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
   filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
   count(appln_filing_year, Y_tag) %>%
   ggplot(aes(x = appln_filing_year, y = n, col = Y_tag)) + 
@@ -189,6 +190,7 @@ data_appln %>%
 
 ```{r}
 data_pers_appln %>%
+  mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
   filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
   filter(nuts %in% select_region) %>%
   count(appln_filing_year, nuts, Y_tag, wt = weight_frac) %>%
@@ -205,6 +207,7 @@ data_pers_appln %>%
 
 ```{r}
 data_pers_appln %>%
+  mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
   filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
   count(appln_filing_year, person_ctry_code, Y_tag, wt = weight_frac) %>%
   ggplot(aes(x = appln_filing_year, y = n, col = person_ctry_code)) + 
@@ -216,6 +219,8 @@ data_pers_appln %>%
        x = 'Year',
        y = 'Number applications, by region and Y tag',
        col = 'Country')
+
+ggsave("../output/paper_figs/fig_3.jpeg", dpi = 300)
 ```
 
 # Applicants
@@ -308,6 +313,8 @@ g_tech %N>%
   labs(#title = 'Industry Space (all Nordics)',
        #subtitle = 'Nodes = NACE 2 Industries. Edges: Relatedness'
     )
+
+ggsave("../output/paper_figs/fig_9.jpeg", dpi = 300)
 ```
 
 # Regional specialization (RTA) development
@@ -347,6 +354,8 @@ p1 %>%
        y = 'N green specializations',
        size = 'N green patents',
        col = 'HHI green patents') 
+
+ggsave("../output/paper_figs/fig_4.jpeg", dpi = 300)
 
 rm(p1, p2)
 ```
@@ -400,6 +409,8 @@ p1 %>%
        x = 'Relatedness non-green',
        y = 'Relatedness green',
        size = 'N green patents') 
+
+ggsave("../output/paper_figs/fig_5.jpeg", dpi = 300)
 
 rm(p1, x_mid, y_mid)
 ```
@@ -458,6 +469,8 @@ p1 %>%
        col = 'NACE',
        size = 'N green patents') 
 
+ggsave("../output/paper_figs/fig_6.jpeg", dpi = 300)
+
 rm(p1, x_mid, y_mid)
 ```
 
@@ -513,7 +526,7 @@ TODO: Increase text size
 
 ```{r, fig.width=10, fig.height=12.5}
 path_green %>%
-  filter(nuts %in% select_region, green_path != 'stagnation') %>%
+  filter(nuts %in% select_region) %>% #, green_path != 'stagnation') %>%
   # split by inc and non_incumbents
   pivot_longer(c(n_new, n_inc), names_to = 'applt_type') %>% 
   # Aggregate
@@ -541,6 +554,8 @@ path_green %>%
        size = 'Share green patents',
        col = 'Green path type',
        fill = 'Applicant type') 
+
+ggsave("../output/paper_figs/fig_7.jpeg", dpi = 300)
 ```
 
 Break down main path industry
@@ -583,6 +598,8 @@ map_nordic %>%
        x = NULL,
        y = NULL,
        fill = 'Main green path') #+ theme(legend.position = 'bottom')
+
+ggsave("../output/paper_figs/fig_8.jpeg", dpi = 300)
 ```
 
 # Tables
@@ -673,7 +690,7 @@ tab_all
 
 
 ```{r}
-tab_all %>% write_csv('../output/table_regions_all.csv')
+tab_all %>% write_csv2('../output/table_regions_all.csv')
 ```
 
 
