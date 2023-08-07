@@ -15,9 +15,6 @@ output:
 ## Setup
 
 ```{r, setup, include=FALSE}
-# Not sure if necessary... was an issue with a version conflict... try new version in the future again...
-# devtools::install_version("RPostgres", version = "1.2.1", repos = "http://cran.us.r-project.org")
-
 ### general options
 Sys.setenv(LANG = "en")
 options("scipen" = 100, "digits" = 4) # override R's tendency to use scientific notation
@@ -38,23 +35,13 @@ library(dbplyr) # for dplyr with databases
 
 # Load functions
 source("functions/functions_relatedness.R")
-```
 
 ### Connect to database
-
-```{r}
 # Load script with variables
 source("../variables.R")
 
 # set up connection to existing PostgreSQL database, just plug in own details
-con <- dbConnect(drv = RPostgres::Postgres(), 
-                 dbname = var_dbname,
-                 host = var_host, 
-                 port = var_port,
-                 user = var_user, 
-                 password = var_password,
-                 sslmode = 'require'
-                 )
+con <- dbConnect(drv = RPostgres::Postgres(),  dbname = var_dbname, host = var_host,  port = var_port, user = var_user,  password = var_password, sslmode = 'require')
 
 rm(var_dbname, var_host, var_password, var_port, var_user)
 ```
@@ -65,9 +52,7 @@ rm(var_dbname, var_host, var_password, var_port, var_user)
 
 ```{r}
 tbl_nuts <- tbl(con, 'tls904_nuts')
-#tbl(con, 'tls902_ipc_nace2') #  TODO: CHeck why not included in our PATSTAT
 ```
-
 
 # Defining parameters
 
@@ -81,84 +66,23 @@ var_t_break <- 2000
 
 ```{r}
 data_appln <- read_rds('../temp/tbl_region_appln.rds')
-
 data_docdb_fam_cpc <- read_rds('../temp/tbl_region_docdb_fam_cpc.rds')
-data_nace2 <- read_rds('../temp/tbl_region_appln_nace2.rds') 
-
+data_appln_isic <- read_rds('../temp/tbl_appln_isic.rds')
 data_pers_appln <- read_rds('../temp/tbl_region_pers_appln.rds')
-data_person <- read_rds('../temp/tbl_region_person.rds') %>% filter(nuts_level == 3)
+#data_person <- read_rds('../temp/tbl_region_person.rds') 
 ```
-
 
 # Initial data cleaning
 
-## Restrict patent applications (families, years...)
-
 ```{r}
-# Limit timeframe,
-data_appln %<>%
-  filter(granted == 'Y') #%>% # only granted patents
-  #filter(appln_filing_year >= var_t_start,
-        # appln_filing_year <= var_t_end) 
-```
-
-
-```{r}
-# only include first patent per docdb family
-data_appln %<>%
-  group_by(docdb_family_id) %>%
-    slice_min(order_by = appln_filing_date, n = 1, with_ties = FALSE) %>%
-  ungroup() 
-```
-
-## Final application preprocessing
-
-```{r}
-# Create period tag
-data_appln %<>%
-  mutate(period = ((appln_filing_year >= var_t_break) + 1) %>% as.numeric() %>% as.character()) 
-```
-
-## Filter all datasets
-
-```{r}
-data_pers_appln %<>% inner_join(data_appln %>% select(appln_id, appln_filing_year, Y_tag), by = 'appln_id')
-data_person %<>% semi_join(data_pers_appln, by = 'person_id')
-
-data_docdb_fam_cpc %<>% semi_join(data_appln, by = 'docdb_family_id')
-data_nace2 %<>% semi_join(data_appln, by = 'appln_id')
+data_appln %<>% mutate(period = ((appln_filing_year >= var_t_break) + 1) %>% as.numeric() %>% as.character()) 
 ```
 
 
 # Technology space (By technology classes)
 
-## NACE 
-
 ```{r}
-list_nace2 <- read_csv("../input/list_nace2.csv") %>%
-  select(Level, Code, Description) %>%
-  rename(level = Level,
-         nace2_code = Code,
-         nace2_name = Description) %>%
-  mutate(nace_sec = ifelse(level == 1, nace2_code, NA),
-         nace_div = ifelse(level == 2, nace2_code, NA),
-         nace_group = ifelse(level == 3, nace2_code, NA),
-         nace_class = ifelse(level == 4, nace2_code, NA)) %>%
-  fill(nace_sec, nace_div, nace_group, nace_class, .direction = 'down') %>%
-    mutate(nace_sec_name = ifelse(level == 1, nace2_name, NA),
-         nace_div_name = ifelse(level == 2, nace2_name, NA),
-         nace_group_name = ifelse(level == 3, nace2_name, NA),
-         nace_class_name = ifelse(level == 4, nace2_name, NA)) %>%
-    fill(nace_sec_name, nace_div_name, nace_group_name, nace_class_name, .direction = 'down') 
-```
-
-
-```{r}
-data_nace2 %<>% 
-  mutate(nace_div = nace2_code %>% str_sub(1, 2),
-         nace_group = nace2_code %>% str_sub(1, 4),
-         nace_class = nace2_code %>% str_sub(1, 5)) %>%
-  left_join(list_nace2 %>% filter(level == 2) %>% select(nace_div, nace_sec), by = 'nace_div')
+list_isic  <- read_csv('../input/list_isic4_cleaned.csv') 
 ```
 
 ## Create Relatedness matrix
@@ -169,9 +93,9 @@ library(EconGeo)
 ```
 
 ```{r}
-mat_tech <- create_sparse_matrix(i = data_nace2 %>% pull(appln_id),
-                                       j = data_nace2 %>% pull(nace_group),
-                                       weight = data_nace2 %>% pull(weight),
+mat_tech <- create_sparse_matrix(i = data_appln_isic %>% pull(docdb_family_id),
+                                       j = data_appln_isic %>% pull(isic4_l3),
+                                       weight = data_appln_isic %>% pull(probability_weight),
                                        projection = 'j',
                                        sparse = FALSE)
 ```
@@ -189,7 +113,7 @@ library(ggraph)
 
 ```{r}
 g_tech <- mat_tech %>% as_tbl_graph(directed = FALSE) %N>%
-  left_join(list_nace2 %>% filter(level == 3) %>% select(nace_group, nace_sec_name, nace_group_name), by = c('name' = 'nace_group')) %>%
+  left_join(list_isic %>% filter(level == 3) %>% select(isic4_l3, isic4_l3_name, isic4_l2_name, isic4_l1_name), by = c('name' = 'isic4_l3')) %>%
   mutate(dgr = centrality_eigen(weights = weight)) %E>%
   filter(weight >= mean(weight))
 ```
@@ -198,26 +122,23 @@ g_tech <- mat_tech %>% as_tbl_graph(directed = FALSE) %N>%
 g_tech %N>% as_tibble() 
 ```
 
-TODO: Repolace the NAs driven by categorization on class level
-
-
 ## Regional specialization
 
 ```{r}
 region_tech <- data_appln %>%
-  select(appln_id, appln_filing_year, period, Y_tag) %>%
-  left_join(data_nace2 %>% select(appln_id, nace_group, weight), by = 'appln_id') %>%
+  select(appln_id, docdb_family_id, appln_filing_year, period, Y_tag) %>%
+  left_join(data_appln_isic %>% select(docdb_family_id, isic4_l3, probability_weight), by = 'docdb_family_id') %>%
   left_join(data_pers_appln %>% select(appln_id, person_id, nuts, n_inv), by = 'appln_id') %>%
-  mutate(weight_frac = weight / n_inv)
+  mutate(weight_frac = probability_weight / n_inv)
 ```
 
 # Regional path identification
 
 ```{r}
 region_RTA <- region_tech %>%  
-  drop_na(Y_tag, nuts, nace_group, period) %>%
+  drop_na(Y_tag, nuts, isic4_l3, period) %>%
   # Summing weights of non-Y and Y tagged 
-  group_by(Y_tag, nuts, nace_group, period) %>%
+  group_by(Y_tag, nuts, isic4_l3, period) %>%
   summarise(n_tech_region = sum(weight_frac, na.rm = TRUE)) %>%
   ungroup() %>%
   # Calculate location quotient
@@ -227,70 +148,19 @@ region_RTA <- region_tech %>%
   group_by(Y_tag, period, nuts) %>%
     mutate(n_region = sum(n_tech_region, na.rm = TRUE)) %>%
   ungroup() %>%
-  group_by(Y_tag, period, nace_group) %>%
+  group_by(Y_tag, period, isic4_l3) %>%
     mutate(n_tech = sum(n_tech_region, na.rm = TRUE)) %>%
   ungroup() %>%
   mutate(rta = ((n_tech_region / n_region) / (n_tech / n)) %>% round(2),
          rta_bin = (rta >= 1) %>% as.numeric() ) %>%
   # Replace NAs
   replace_na(list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0)) %>%
-  complete(Y_tag, nuts, nace_group, period, fill = list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0))
+  complete(Y_tag, nuts, isic4_l3, period, fill = list(rta = 0, rta_bin = 0, n_region = 0, n_tech = 0, n_tech_region = 0, n = 0))
 ```
-<!---
-
-# Get applicants
-
-Note: This is only the applicants for patents filed by inventors 
-Note2: DO THAT SOMEWHERE EARLIER
-
-```{r}
-tbl_appln <- tbl(con, 'tls201_appln')
-tbl_pers_appln <- tbl(con, 'tls207_pers_appln') 
-tbl_person <- tbl(con, 'tls206_person')
-```
-
-
-```{r}
-tbl_applt_list <- tbl_pers_appln %>%
-  filter(applt_seq_nr > 0) %>%
-  select(-applt_seq_nr, invt_seq_nr) %>%
-  semi_join(data_appln %>% select(appln_id), by = 'appln_id', copy = TRUE) %>%
-  distinct(person_id) %>%
-  compute()
-```
-
-```{r}
-# TODO: Also merge in Y-tag and year
-tbl_applt_appln_all <- tbl_pers_appln %>%
-  semi_join(tbl_applt_list, by = 'person_id') %>% 
-  left_join(tbl_appln %>% select(appln_id, appln_filing_year), by = 'appln_id') %>%  
-  compute()
-```
-
-```{r}
-tbl_applt <- tbl_person %>%
-  semi_join(tbl_applt_list, by = 'person_id') %>%
-  compute()
-```
---->
-
-
 
 # Save all
 
 ```{r}
-# Lists
-list_nace2 %>% write_rds('../temp/list_nace2.rds')
-
-# Regular tables
-data_appln %>% write_rds('../temp/data_appln.rds')
-
-data_person %>% write_rds('../temp/data_person.rds')
-data_pers_appln  %>% write_rds('../temp/data_pers_appln.rds')
-
-data_docdb_fam_cpc %>% write_rds('../temp/data_docdb_fam_cpc.rds')
-data_nace2 %>% write_rds('../temp/data_nace2.rds')
-
 # Adittional ones
 g_tech %>% write_rds('../temp/g_tech.rds')
 region_RTA %>% write_rds('../temp/region_RTA.rds')

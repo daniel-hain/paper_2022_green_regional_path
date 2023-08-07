@@ -56,16 +56,22 @@ library(sf)
 
 ## Preprocessing 
 
+# Defining parameters
+
+```{r}
+var_t_start <- 1985
+var_t_end <- 2015
+var_t_break <- 2000
+```
+
 ```{r}
 ## LOAD DATA
 
 # Regular tables
-data_appln <- read_rds('../temp/data_appln.rds')
-data_pers_appln  <- read_rds('../temp/data_pers_appln.rds')
-data_nace2 <- read_rds('../temp/data_nace2.rds')
-data_docdb_fam_cpc <- read_rds('../temp/data_docdb_fam_cpc.rds')
-#data_person <- read_rds('../temp/data_person.rds')
-
+data_appln <- read_rds('../temp/tbl_region_appln.rds') %>% mutate(period = ((appln_filing_year >= var_t_break) + 1) %>% as.numeric() %>% as.character()) 
+data_docdb_fam_cpc <- read_rds('../temp/tbl_region_docdb_fam_cpc.rds')
+data_appln_isic <- read_rds('../temp/tbl_appln_isic.rds')
+data_pers_appln <- read_rds('../temp/tbl_region_pers_appln.rds')
 
 # Regional specialization
 region_RTA <- read_rds('../temp/region_RTA.rds') %>% 
@@ -79,12 +85,12 @@ region_tech <- read_rds('../temp/region_tech.rds') %>%
 # Technology space
 g_tech <- read_rds('../temp/g_tech.rds')
 
-# Lists
-list_nace2 <- read_rds('../temp/list_nace2.rds')
-
 # Applicants
 region_applt_appln <- read_rds('../temp/tbl_region_applt_appln.rds') %>% select(-applt_seq_nr, -invt_seq_nr)
 region_applt <- read_rds('../temp/tbl_region_applt.rds')
+
+# Lists
+list_isic  <- read_csv('../input/list_isic4_cleaned.csv') 
 ```
 
 ```{r}
@@ -95,11 +101,14 @@ n_cutoff_green = 25
 
 ```{r}
 ## SELECT FOCUS REGIONS
+select_country = c('SE', 'NO','DK', 'FI')
+
 reg_in = '' # c('SE232', 'NO043', 'DK012')
 n_regions = 4     
 
 # Restrict to top N regions
 select_region <- region_tech %>%
+  filter(country %in% select_country) %>%
   group_by(country, nuts) %>%
   summarise(n = sum(weight_frac, na.rm = TRUE),
             n_Y = sum(weight_frac * Y_tag, na.rm = TRUE)) %>%
@@ -154,9 +163,9 @@ region_RTA_agg <- region_RTA %>%
 ```{r}
 # Dataframe with regions and technology fields
 tech_dev <- region_RTA %>%
-  select(country, period, nuts, nuts_period, nace_group, Y_tag, n_tech_region, rta, rta_bin) %>%
-  arrange(country, nuts, nace_group, Y_tag, period) %>%
-  group_by(country, nuts, nace_group, Y_tag) %>%
+  select(country, period, nuts, nuts_period, isic4_l3, Y_tag, n_tech_region, rta, rta_bin) %>%
+  arrange(country, nuts, isic4_l3, Y_tag, period) %>%
+  group_by(country, nuts, isic4_l3, Y_tag) %>%
   mutate(n_tech_region_lag = lag(n_tech_region, 1),
          n_tech_region_delta = n_tech_region - n_tech_region_lag,
          pct_tech_region_delta = (n_tech_region - n_tech_region_lag) / ( n_tech_region_lag + 1),
@@ -165,16 +174,17 @@ tech_dev <- region_RTA %>%
          rta_bin_lag = lag(rta_bin, 1),
          rta_bin_delta = rta_bin - rta_bin_lag) %>%
   ungroup() %>%
-  arrange(country, nuts, nace_group, Y_tag, period) 
+  arrange(country, nuts, isic4_l3, Y_tag, period) 
 ```
 
 # Patent application development
 
 * In the following, a brief descriptive analysis of the development of green and non-green patent application in the Nordics
-* In addition, a breackdown of green patents by top green patenting reagions
+* In addition, a breackdown of green patents by top green patenting regions
 
 ```{r}
 data_appln %>%
+  #filter(country %in% c('SE', 'NO','DK', 'FI')) %>%
   mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
   filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
   count(appln_filing_year, Y_tag) %>%
@@ -186,10 +196,17 @@ data_appln %>%
        y = 'Number applications',
        col = 'Green')
 ```
+!! TODO ADJUST FOR COUNRTY!
+
+```{r}
+data_pers_appln %<>%
+  inner_join(data_appln %>% select(appln_id, appln_filing_year), by = 'appln_id')
+```
 
 
 ```{r}
 data_pers_appln %>%
+  filter(person_ctry_code %in% c('SE', 'NO','DK', 'FI')) %>%
   mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
   filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
   filter(nuts %in% select_region) %>%
@@ -207,6 +224,7 @@ data_pers_appln %>%
 
 ```{r}
 data_pers_appln %>%
+  filter(person_ctry_code %in% c('SE', 'NO','DK', 'FI')) %>%
   mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
   filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
   count(appln_filing_year, person_ctry_code, Y_tag, wt = weight_frac) %>%
@@ -220,7 +238,8 @@ data_pers_appln %>%
        y = 'Number applications, by region and Y tag',
        col = 'Country')
 
-ggsave("../output/paper_figs/fig_3.jpeg", dpi = 300)
+#ggsave("../output/paper_figs/fig_3.jpeg", dpi = 300)
+#ggsave("../output/paper_figs/fig_3.eps")
 ```
 
 # Applicants
@@ -229,14 +248,13 @@ ggsave("../output/paper_figs/fig_3.jpeg", dpi = 300)
 * That can be domestic or foreign applicants
 
 ```{r}
-
 region_applt_appln %<>%
   group_by(appln_id) %>%
   mutate(n_frac = 1 / n()) %>%
   ungroup() %>%
   left_join(region_applt %>% select(person_id, han_id, han_name, person_ctry_code, nuts), by = 'person_id') %>%
-  left_join(data_appln %>% select(appln_id, docdb_family_id, appln_filing_year, period, Y_tag), by = 'appln_id') %>%
-  left_join(data_nace2 %>% select(appln_id, nace_group) %>% group_by(appln_id) %>% mutate(nace_share = 1 / n()) %>% ungroup() %>% nest(nace = c(nace_group, nace_share)), by = 'appln_id') %>%
+  left_join(data_appln %>% select(appln_id, docdb_family_id, appln_filing_year, period), by = 'appln_id') %>%
+  left_join(data_appln_isic %>% select(docdb_family_id, isic4_l3, probability_weight) %>% group_by(docdb_family_id) %>% mutate(isic_share = 1 / n(), isic_weight = isic_share * probability_weight) %>% ungroup() %>% nest(isic = c(isic4_l3, isic_share, isic_weight)), by = 'docdb_family_id') %>%
   drop_na()
 ```
 
@@ -269,9 +287,9 @@ applt_stats %>% arrange(desc(n_Y)) %>% head(100)
 # Share of incumbants by technology
 region_techn_incumb <- region_applt_appln %>% 
   left_join(applt_stats %>% select(han_id, incumbant), by = 'han_id') %>%
-  unnest(nace) %>%
-  mutate(n_weight = n_frac * nace_share) %>%
-  group_by(nuts, nace_group, period, Y_tag) %>%
+  unnest(isic) %>%
+  mutate(n_weight = n_frac * isic_weight) %>%
+  group_by(nuts, isic4_l3, period, Y_tag) %>%
   summarise(n = sum(n_weight),
             n_inc = sum(n_weight * incumbant)) %>%
   ungroup() %>%
@@ -302,19 +320,21 @@ colnames(coords_tech) <- c("x", "y")
 
 ```{r, fig.width=10, fig.height= 10}
 g_tech %N>%
-  mutate(nace_group_name = nace_group_name %>% str_trunc(50, side = 'right')) %>%
+  mutate(isic4_l3_name = isic4_l3_name %>% str_trunc(50, side = 'right')) %>%
   ggraph(layout =  coords_tech) + 
   geom_edge_link(aes(width = weight, alpha = weight), colour = "grey") + 
-  geom_node_point(aes(colour = nace_sec_name, size = dgr)) + 
-  geom_node_text(aes(label = nace_group_name, size = dgr, filter = percent_rank(dgr) >= 0.75 ), repel = TRUE) +
+  geom_node_point(aes(colour = isic4_l1_name, size = dgr)) + 
+  geom_node_text(aes(label = isic4_l3_name, size = dgr, filter = percent_rank(dgr) >= 0.90 ), repel = TRUE) +
   theme_void() +
   theme(legend.position = 'bottom',
         legend.box = "vertical") +
-  labs(#title = 'Industry Space (all Nordics)',
+  labs(col = 'ISIC Rev.4 group'
+         #title = 'Industry Space (all Nordics)',
        #subtitle = 'Nodes = NACE 2 Industries. Edges: Relatedness'
     )
 
-ggsave("../output/paper_figs/fig_9.jpeg", dpi = 300)
+#ggsave("../output/paper_figs/fig_9.jpeg", dpi = 300)
+#ggsave("../output/paper_figs/fig_9.eps")
 ```
 
 # Regional specialization (RTA) development
@@ -355,7 +375,8 @@ p1 %>%
        size = 'N green patents',
        col = 'HHI green patents') 
 
-ggsave("../output/paper_figs/fig_4.jpeg", dpi = 300)
+# ggsave("../output/paper_figs/fig_4.jpeg", dpi = 300)
+#ggsave("../output/paper_figs/fig_4.eps")
 
 rm(p1, p2)
 ```
@@ -363,22 +384,22 @@ rm(p1, p2)
 
 # Analysis for existing green paths:
 
-NOTE: new patentds in specializations? 
+NOTE: new patents in specializations? 
 
 ```{r}
 tech_rel_dev <- tech_rel %>% 
   select(from, to, weight) %>%
-  left_join(tech_dev %>% distinct(nace_group, nuts), by = c('from' = 'nace_group')) %>%
+  inner_join(tech_dev %>% filter(country %in% select_country) %>% distinct(isic4_l3, nuts), by = c('from' = 'isic4_l3')) %>%
   # filter for rta in period 1
-  inner_join(tech_dev %>% filter(period == '1', rta_bin == 1) %>% select(nace_group, nuts, Y_tag), by = c('to' = 'nace_group', 'nuts')) %>%
+  inner_join(tech_dev %>% filter(period == '1', rta_bin == 1) %>% select(isic4_l3, nuts, Y_tag), by = c('to' = 'isic4_l3', 'nuts')) %>%
   # filter for new green specialization in period 2
-  semi_join(tech_dev %>% filter(period == '2', rta_bin == 1, rta_bin_delta == 1, Y_tag == TRUE), by = c('from' = 'nace_group', 'nuts')) %>%
-  rename(nace_group = from, related_techn = to) 
+  semi_join(tech_dev %>% filter(period == '2', rta_bin == 1, rta_bin_delta == 1, Y_tag == TRUE), by = c('from' = 'isic4_l3', 'nuts')) %>%
+  rename(isic4_l3= from, related_techn = to) 
 ```
 
 ```{r, fig.width= 7.5, fig.height=7.5}
 p1 <- tech_rel_dev %>%
-  group_by(nuts, nace_group, Y_tag) %>%
+  group_by(nuts, isic4_l3, Y_tag) %>%
   summarise(rel_max = weight %>% max(),
             rel_sum = weight %>% sum(),
             rel_mean = weight %>% mean()) %>%
@@ -410,7 +431,8 @@ p1 %>%
        y = 'Relatedness green',
        size = 'N green patents') 
 
-ggsave("../output/paper_figs/fig_5.jpeg", dpi = 300)
+#ggsave("../output/paper_figs/fig_5.jpeg", dpi = 300)
+#ggsave("../output/paper_figs/fig_5.eps")
 
 rm(p1, x_mid, y_mid)
 ```
@@ -431,31 +453,37 @@ list_nuts %<>% bind_rows(list_nuts_add)
 ```
 
 
+```{r}
+list_isic %>%
+  filter(level ==3) %>%
+    select(isic4_l1, isic4_l3, isic4_l4_name, isic4_l1_name) 
+```
 
 
 ```{r, fig.width=10, fig.height=10}
 p1 <- tech_rel_dev %>%
   filter(nuts %in% select_region) %>%
-  group_by(nuts, nace_group, Y_tag) %>%
+  group_by(nuts, isic4_l3, Y_tag) %>%
   summarise(rel = weight %>% max()) %>%
   ungroup() %>%
   pivot_wider(names_from = Y_tag, values_from = rel, names_prefix = 'Y_', values_fill = 0) %>%
   left_join(tech_dev %>% 
               filter(Y_tag == TRUE, period == '2', rta_bin_delta == 1) %>% 
-              count(nuts, nace_group, wt = n_tech_region), 
-            by = c('nuts', 'nace_group')) %>%
+              count(nuts, isic4_l3, wt = n_tech_region), 
+            by = c('nuts', 'isic4_l3')) %>%
   mutate(country = nuts %>% str_sub(1,2)) %>%
-  left_join(list_nace2 %>%select(nace_group, nace_sec_name) %>% distinct(), by = 'nace_group') %>%
-  left_join(list_nuts %>% distinct(), by = 'nuts') %>% mutate(nuts_name = paste(nuts, nuts_name, sep = ': ') )
+  left_join(list_isic  %>%select(isic4_l3, isic4_l3_name, isic4_l1_name) %>% distinct(), by = 'isic4_l3') %>%
+  left_join(list_nuts %>% distinct(), by = 'nuts') %>% 
+  mutate(nuts_name = paste(nuts, nuts_name, sep = ': ') )
 
 x_mid <- mean(p1$Y_FALSE, na.rm = TRUE)
 y_mid <- mean(p1$Y_TRUE, na.rm = TRUE)
 
 # plotting
 p1 %>%
-  ggplot(aes(x = Y_FALSE, y = Y_TRUE, size = n, col = nace_sec_name)) +
+  ggplot(aes(x = Y_FALSE, y = Y_TRUE, size = n, col = isic4_l1_name)) +
   geom_point() +
-  geom_text_repel(aes(label = nace_group), box.padding = 0.5) +
+  geom_text_repel(aes(label = isic4_l3), box.padding = 0.5) +
   geom_vline(xintercept = x_mid, linetype = "dashed", color = 'grey') + 
   geom_hline(yintercept = y_mid, linetype = "dashed", color = 'grey') +
   facet_wrap(vars(nuts_name), ncol = n_regions) +
@@ -466,29 +494,30 @@ p1 %>%
        #note = 'Relatedness is the mean over all new green specializations, per green specialization largest relatedness to former specialization counted',
        x = 'Relatedness non-green',
        y = 'Relatedness green',
-       col = 'NACE',
+       col = 'ISIC Rev.4',
        size = 'N green patents') 
 
-ggsave("../output/paper_figs/fig_6.jpeg", dpi = 300)
+# ggsave("../output/paper_figs/fig_6.jpeg", dpi = 300)
+# ggsave("../output/paper_figs/fig_6.eps")
 
 rm(p1, x_mid, y_mid)
 ```
 
-!!! MAke additio nal ploty including old green specializations
+!!! Make additio nal ploty including old green specializations
 
 # Profiling regions
 
 ```{r}
 path_green_new <- tech_rel_dev %>%
-  group_by(nuts, nace_group, Y_tag) %>%
+  group_by(nuts, isic4_l3, Y_tag) %>%
   summarise(rel = weight %>% max()) %>%
   ungroup() %>%
   pivot_wider(names_from = Y_tag, values_from = rel, names_prefix = 'Y_', values_fill = 0) %>%
   left_join(tech_dev %>% 
               filter(Y_tag == TRUE, period == '2', rta_bin_delta == 1) %>% 
-              select(nuts, nace_group, n_tech_region) %>% 
-              count(nuts, nace_group, wt = n_tech_region), 
-            by = c('nuts', 'nace_group')) %>%
+              select(nuts, isic4_l3, n_tech_region) %>% 
+              count(nuts, isic4_l3, wt = n_tech_region), 
+            by = c('nuts', 'isic4_l3')) %>%
   mutate(green_path = case_when( 
     Y_FALSE <= mean(Y_FALSE) & Y_TRUE <= mean(Y_TRUE) ~ 'creation',
     Y_FALSE <= mean(Y_FALSE) & Y_TRUE > mean(Y_TRUE) ~ 'diversification',
@@ -506,13 +535,13 @@ path_green <- tech_dev %>%
     Y_tag == TRUE & period == '2' & rta_bin == 0 & rta_bin_delta == -1 ~ 'extinction'
   )) %>%
   drop_na(green_path) %>%
-  select(nuts, nace_group, n_tech_region_delta, green_path) %>%
+  select(nuts, isic4_l3, n_tech_region_delta, green_path) %>%
   rename(n = n_tech_region_delta) %>%
   # add existing green paths
   bind_rows(path_green_new) %>%
   mutate(n = n %>% abs()) %>%
   # add incumbant measures
-  left_join(region_techn_incumb %>% filter(period == '2', Y_tag == TRUE) %>% select(nuts, nace_group, share_inc), by = c('nuts', 'nace_group')) %>%
+  left_join(region_techn_incumb %>% filter(period == '2', Y_tag == TRUE) %>% select(nuts, isic4_l3, share_inc), by = c('nuts', 'isic4_l3')) %>%
   mutate(n_new = n * (1 - share_inc),
          n_inc = n * share_inc)
 ```
@@ -555,7 +584,8 @@ path_green %>%
        col = 'Green path type',
        fill = 'Applicant type') 
 
-ggsave("../output/paper_figs/fig_7.jpeg", dpi = 300)
+##ggsave("../output/paper_figs/fig_7.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_7.eps")
 ```
 
 Break down main path industry
@@ -599,7 +629,8 @@ map_nordic %>%
        y = NULL,
        fill = 'Main green path') #+ theme(legend.position = 'bottom')
 
-ggsave("../output/paper_figs/fig_8.jpeg", dpi = 300)
+# ggsave("../output/paper_figs/fig_8.jpeg", dpi = 300)
+# ggsave("../output/paper_figs/fig_8.eps")
 ```
 
 # Tables
@@ -607,7 +638,8 @@ ggsave("../output/paper_figs/fig_8.jpeg", dpi = 300)
 ```{r}
 # Basics Nr patents
 tab_basic <- tech_dev %>%
-  filter(period == 2) %>% 
+  filter(country %in% select_country, 
+         period == 2) %>% 
   count(nuts, Y_tag, wt = n_tech_region) %>%
   pivot_wider(names_from = Y_tag, values_from = n, values_fill = 0, names_prefix = 'Y_') %>%
   mutate(Y_FALSE = round(Y_FALSE), Y_TRUE = round(Y_TRUE),
@@ -619,7 +651,7 @@ tab_basic <- tech_dev %>%
 tab_applt <- region_applt_appln %>%
   rename(weight_applt = weight_frac) %>%
   filter(period == 2) %>%
-  left_join(region_tech %>% select(appln_id, nuts, weight) %>% rename(weight_invt = weight), by = c('appln_id', 'nuts')) %>%
+  left_join(region_tech %>% select(appln_id, nuts, probability_weight) %>% rename(weight_invt = probability_weight), by = c('appln_id', 'nuts')) %>%
   mutate(weight_all = weight_applt * weight_invt) %>%
   count(nuts, han_name, han_id, Y_tag, wt = weight_all) %>%
   pivot_wider(names_from = Y_tag, values_from = n, values_fill = 0, names_prefix = 'Y_') %>%
@@ -632,13 +664,13 @@ tab_applt <- region_applt_appln %>%
   mutate(applicant = paste0(han_name, ' (',incumbant ,', n green: ', Y_TRUE, ', share:', Y_share, ')')) %>%
   select(nuts, applicant)
 
-tab_nace <- tech_dev %>% 
+tab_isic <- tech_dev %>% 
   filter(period == 2, Y_tag == TRUE) %>%
   group_by(nuts) %>%
   slice_max(order_by = n_tech_region, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
-  mutate(top_Y_nace = paste0(nace_group, ' (n ', n_tech_region %>% round(), ')')) %>%
-  select(nuts, top_Y_nace)
+  mutate(top_Y_isic = paste0(isic4_l3, ' (n ', n_tech_region %>% round(), ')')) %>%
+  select(nuts, top_Y_isic)
 
 tab_cpc_Y <- data_docdb_fam_cpc %>%
   mutate(cpc_Y = cpc_class_symbol %>% str_sub(1,4)) %>%
@@ -648,10 +680,10 @@ tab_cpc_Y <- data_docdb_fam_cpc %>%
   ungroup() %>%
   filter(cpc_Y %>% str_starts('Y02') | cpc_Y %>% str_starts('Y04')) %>%
   count(docdb_family_id, cpc_Y, wt = weight_frac, name = 'weight_cpc') %>%
-  inner_join(data_appln %>% filter(period == '2') %>% distinct(appln_id, docdb_family_id), by = 'docdb_family_id') %>%
-  left_join(data_pers_appln %>% select(appln_id, nuts,weight_frac) %>% rename(weight_nuts = weight_frac), by = 'appln_id') %>%
-  mutate(weight_frac = weight_cpc * weight_nuts) %>%
-  count(cpc_Y, nuts, wt = weight_frac) %>%
+  inner_join(data_appln %>% distinct(appln_id, docdb_family_id), by = 'docdb_family_id') %>%
+  left_join(data_pers_appln %>% select(appln_id, nuts), by = 'appln_id') %>% # ,weight_frac) %>% rename(weight_nuts = weight_frac)
+  #mutate(weight_frac = weight_cpc * weight_nuts) %>%
+  count(cpc_Y, nuts, wt = weight_cpc) %>%
   group_by(nuts) %>%
   slice_max(order_by = n, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
@@ -679,7 +711,7 @@ tab_path_total <- path_green %>%
 ```{r}
 tab_all <- tab_basic %>%
   left_join(tab_cpc_Y, by = 'nuts') %>%  
-  left_join(tab_nace, by = 'nuts') %>%  
+  left_join(tab_isic, by = 'nuts') %>%  
   left_join(tab_applt, by = 'nuts') %>%
   left_join(tab_path_rel, by = 'nuts') %>%
   left_join(tab_path_total, by = 'nuts') %>%

@@ -1,0 +1,775 @@
+---
+title: 'Green Regional Path paper: First results'
+author: "Daniel S. Hain"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_notebook:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+  html_document:
+    toc: yes
+    toc_depth: '3'
+    df_print: paged
+---
+
+```{r, setup, include=FALSE}
+### general options
+Sys.setenv(LANG = "en")
+options("scipen" = 100, "digits" = 4) # override R's tendency to use scientific notation
+
+### Clean workspace
+rm(list=ls())
+graphics.off()
+
+### Load packages (maybe need to be installed first)
+# Standard
+library(tidyverse) # General DS toolkit
+library(magrittr) # For advanced piping
+
+# Databases
+library(DBI) # GEneral R database interface
+library(RPostgres) # PostgreSQL interface driver 
+library(dbplyr) # for dplyr with databases
+
+# networks
+library(tidygraph)
+library(ggraph)
+library(ggrepel)
+
+# GEoplot
+library(giscoR)
+library(sf)
+```
+
+
+# Introduction
+
+* In this notebook, we present the first results of an analysis of green development paths of Nordic regions
+* It is based on patent data from 1990-2015 (PATSTAT, Autumn 2021 Edition)
+* Analysis is done on all Nordic NUTS 2 regions (fractionalized patent allocation by inventor location, DOCDB family level)
+* Industries are captured by NACE2 codes of patents according to the OECD IPC-NACE2 concordance table.
+* Green patents are identified using the Y02 tag in the CPC classification
+
+## Preprocessing 
+
+```{r}
+## LOAD DATA
+
+# Regular tables
+data_appln <- read_rds('../temp/data_appln.rds')
+data_pers_appln  <- read_rds('../temp/data_pers_appln.rds')
+data_nace2 <- read_rds('../temp/data_nace2.rds')
+data_docdb_fam_cpc <- read_rds('../temp/data_docdb_fam_cpc.rds')
+#data_person <- read_rds('../temp/data_person.rds')
+
+
+# Regional specialization
+region_RTA <- read_rds('../temp/region_RTA.rds') %>% 
+  mutate(country = nuts %>% str_sub(1,2),
+         nuts_period = paste(nuts, 'P', period)) 
+
+region_tech <- read_rds('../temp/region_tech.rds') %>% 
+  mutate(country = nuts %>% str_sub(1,2),
+         nuts_period = paste(nuts, 'P', period)) 
+
+# Technology space
+g_tech <- read_rds('../temp/g_tech.rds')
+
+# Lists
+list_nace2 <- read_rds('../temp/list_nace2.rds')
+
+# Applicants
+region_applt_appln <- read_rds('../temp/tbl_region_applt_appln.rds') %>% select(-applt_seq_nr, -invt_seq_nr)
+region_applt <- read_rds('../temp/tbl_region_applt.rds')
+```
+
+```{r}
+## Defining parameters
+n_cutoff = 50
+n_cutoff_green = 25
+```
+
+```{r}
+## SELECT FOCUS REGIONS
+reg_in = '' # c('SE232', 'NO043', 'DK012')
+n_regions = 4     
+
+# Restrict to top N regions
+select_region <- region_tech %>%
+  group_by(country, nuts) %>%
+  summarise(n = sum(weight_frac, na.rm = TRUE),
+            n_Y = sum(weight_frac * Y_tag, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(country) %>%
+  arrange(desc(n_Y)) %>%
+  mutate(index = 1:n()) %>%
+  ungroup() %>%
+  filter(index <= n_regions | nuts %in% reg_in) %>%
+  distinct(nuts) %>%
+  pull(nuts)
+
+rm(reg_in)
+```
+
+```{r}
+# Createdataframe with technology relatedness edgelist
+tech_rel <- g_tech %E>%
+  mutate(from_nace = .N()$name[from],
+         to_nace = .N()$name[to]) %>%
+  as_tibble() %>%
+  mutate(from = from_nace %>% as.character(),
+         to = to_nace %>% as.character()) %>%
+  arrange(from, to) %>%
+  select(from, to, weight)
+
+tech_rel %<>%
+  # Add opposite direction
+  bind_rows(tech_rel %>% 
+              rename(from_new = to, to_new = from) %>% 
+              rename(from = from_new, to = to_new) %>%
+              relocate(from, to)) %>%
+  # Add self loops
+  bind_rows(tech_rel %>%
+              distinct(from) %>%
+              mutate(to = from,
+                     weight = 1)) %>%
+  distinct(from, to, .keep_all = TRUE)
+```
+
+
+```{r}
+# Summarize Regions
+region_RTA_agg <- region_RTA %>%
+  group_by(country, nuts, period, nuts_period, Y_tag) %>%
+  summarise(n_spec = rta_bin %>% sum(na.rm = TRUE),
+            n_spec_count = (n_tech_region * rta_bin) %>% sum(na.rm = TRUE),
+            HHI = sum((n_tech_region/sum(n_tech_region) * 100)^2) ) %>%
+  ungroup() 
+```
+
+```{r}
+# Dataframe with regions and technology fields
+tech_dev <- region_RTA %>%
+  select(country, period, nuts, nuts_period, nace_group, Y_tag, n_tech_region, rta, rta_bin) %>%
+  arrange(country, nuts, nace_group, Y_tag, period) %>%
+  group_by(country, nuts, nace_group, Y_tag) %>%
+  mutate(n_tech_region_lag = lag(n_tech_region, 1),
+         n_tech_region_delta = n_tech_region - n_tech_region_lag,
+         pct_tech_region_delta = (n_tech_region - n_tech_region_lag) / ( n_tech_region_lag + 1),
+         rta_lag = lag(rta, 1),
+         rta_delta = rta - rta_lag,
+         rta_bin_lag = lag(rta_bin, 1),
+         rta_bin_delta = rta_bin - rta_bin_lag) %>%
+  ungroup() %>%
+  arrange(country, nuts, nace_group, Y_tag, period) 
+```
+
+# Patent application development
+
+* In the following, a brief descriptive analysis of the development of green and non-green patent application in the Nordics
+* In addition, a breackdown of green patents by top green patenting reagions
+
+```{r}
+data_appln %>%
+  mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
+  filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
+  count(appln_filing_year, Y_tag) %>%
+  ggplot(aes(x = appln_filing_year, y = n, col = Y_tag)) + 
+  geom_line(key_glyph = "timeseries") +
+  labs(#title = 'Patent applications: Development',
+       #subtitle = 'All Nordic contries, by Y tag',
+       x = 'Year',
+       y = 'Number applications',
+       col = 'Green')
+```
+
+
+```{r}
+data_pers_appln %>%
+  mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
+  filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
+  filter(nuts %in% select_region) %>%
+  count(appln_filing_year, nuts, Y_tag, wt = weight_frac) %>%
+  ggplot(aes(x = appln_filing_year, y = n, col = nuts)) + 
+  geom_line(key_glyph = "timeseries") +
+  facet_wrap(vars(Y_tag), scales = 'free') +
+  labs(#title = 'Patent applications: Development',
+       #subtitle = 'All Nordic contries',
+       x = 'Year',
+       y = 'Number applications, by region and Y tag',
+       col = 'Nuts3')
+```
+
+
+```{r}
+data_pers_appln %>%
+  mutate(Y_tag = ifelse(Y_tag == TRUE, 'Green', 'Non-Green')) %>%
+  filter(appln_filing_year <= 2015, appln_filing_year >= 1985) %>%
+  count(appln_filing_year, person_ctry_code, Y_tag, wt = weight_frac) %>%
+  ggplot(aes(x = appln_filing_year, y = n, col = person_ctry_code)) + 
+  geom_line(key_glyph = "timeseries") +
+  facet_wrap(vars(Y_tag), scales = 'free') +
+    theme(legend.position = 'bottom') + 
+  labs(#title = 'Patent applications: Development by country',
+       #subtitle = 'All Nordic contries',
+       x = 'Year',
+       y = 'Number applications, by region and Y tag',
+       col = 'Country')
+
+ggsave("../output/paper_figs/fig_3.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_3.eps")
+```
+
+# Applicants
+
+* Applicants of patents filed by inventors in the Nordics
+* That can be domestic or foreign applicants
+
+```{r}
+
+region_applt_appln %<>%
+  group_by(appln_id) %>%
+  mutate(n_frac = 1 / n()) %>%
+  ungroup() %>%
+  left_join(region_applt %>% select(person_id, han_id, han_name, person_ctry_code, nuts), by = 'person_id') %>%
+  left_join(data_appln %>% select(appln_id, docdb_family_id, appln_filing_year, period, Y_tag), by = 'appln_id') %>%
+  left_join(data_nace2 %>% select(appln_id, nace_group) %>% group_by(appln_id) %>% mutate(nace_share = 1 / n()) %>% ungroup() %>% nest(nace = c(nace_group, nace_share)), by = 'appln_id') %>%
+  drop_na()
+```
+
+
+```{r}
+# List main applicants
+applt_stats <- region_applt_appln %>%
+  group_by(han_id, han_name) %>%
+  summarise(
+    n_pat = sum(n_frac),
+    n_Y = sum(n_frac * Y_tag),
+    first_pat = min(appln_filing_year)
+    ) %>%
+  mutate(share_Y = n_Y / n_pat,
+         age = 2016 - first_pat,
+         incumbant = age >= 10 & n_pat >= 10) %>%
+  ungroup() %>%
+  arrange(desc(n_pat))
+```
+
+```{r}
+applt_stats %>% head(200)
+```
+
+```{r}
+applt_stats %>% arrange(desc(n_Y)) %>% head(100)
+```
+
+```{r}
+# Share of incumbants by technology
+region_techn_incumb <- region_applt_appln %>% 
+  left_join(applt_stats %>% select(han_id, incumbant), by = 'han_id') %>%
+  unnest(nace) %>%
+  mutate(n_weight = n_frac * nace_share) %>%
+  group_by(nuts, nace_group, period, Y_tag) %>%
+  summarise(n = sum(n_weight),
+            n_inc = sum(n_weight * incumbant)) %>%
+  ungroup() %>%
+  mutate(share_inc = n_inc / n)
+```
+
+# Y TAgs
+
+```{r}
+data_docdb_fam_cpc %>% 
+  filter(Y_tag == TRUE) %>%
+  mutate(cpc_class_symbol = cpc_class_symbol %>% str_sub(1,4)) %>%
+  count(cpc_class_symbol, sort = TRUE)
+```
+
+
+
+# Technology space general
+
+* We calculate the relatedness of industries by co-occurence pattern following Hidalgo & Hausmann (2007)
+* Revealed technological advantage (RTA) Is sepperatedly calculated for Y-tag and non-Y-tag patents.
+
+```{r}
+set.seed(1337)
+coords_tech <- g_tech %>% igraph::layout.fruchterman.reingold() %>% as_tibble()
+colnames(coords_tech) <- c("x", "y")
+```
+
+```{r, fig.width=10, fig.height= 10}
+g_tech %N>%
+  mutate(nace_group_name = nace_group_name %>% str_trunc(50, side = 'right')) %>%
+  ggraph(layout =  coords_tech) + 
+  geom_edge_link(aes(width = weight, alpha = weight), colour = "grey") + 
+  geom_node_point(aes(colour = nace_sec_name, size = dgr)) + 
+  geom_node_text(aes(label = nace_group_name, size = dgr, filter = percent_rank(dgr) >= 0.75 ), repel = TRUE) +
+  theme_void() +
+  theme(legend.position = 'bottom',
+        legend.box = "vertical") +
+  labs(#title = 'Industry Space (all Nordics)',
+       #subtitle = 'Nodes = NACE 2 Industries. Edges: Relatedness'
+    )
+
+ggsave("../output/paper_figs/fig_9.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_9.eps")
+```
+
+# Regional specialization (RTA) development
+
+* Comparison of specialization provides in period 1 and 2
+
+```{r}
+p1 <- region_RTA_agg  %>%
+  filter(nuts %in% select_region) %>%
+  pivot_wider(names_from = Y_tag, values_from = c(n_spec, n_spec_count, HHI), values_fill = 0, names_prefix = 'Y_tag_') 
+
+p2 <- p1 %>% 
+  select(period, nuts, n_spec_Y_tag_FALSE, n_spec_Y_tag_TRUE) %>%
+  pivot_wider(names_from = period, values_from = c(n_spec_Y_tag_FALSE, n_spec_Y_tag_TRUE))
+```
+
+```{r, fig.width= 7.5, fig.height=7.5}
+p1 %>%
+  ggplot(aes(x = n_spec_Y_tag_FALSE, y = n_spec_Y_tag_TRUE)) +
+  geom_segment(data = p2, 
+               aes(x = n_spec_Y_tag_FALSE_1,
+                   y = n_spec_Y_tag_TRUE_1,
+                   xend = n_spec_Y_tag_FALSE_2,
+                   yend = n_spec_Y_tag_TRUE_2,
+                   size = 0.75),
+               alpha = 0.15,
+               arrow = arrow(length = unit(0.5, "cm"), type = "closed"),
+               show.legend = FALSE) +
+  geom_point(aes(size = n_spec_count_Y_tag_TRUE, col = HHI_Y_tag_TRUE)) +
+  geom_text_repel(aes(label = nuts), box.padding = 0.5, max.overlaps = Inf) +
+  scale_color_gradient2(low = "skyblue", mid = 'yellow', high = "red", midpoint = 1) +
+  scale_size(range = c(2, 10)) + 
+  theme(legend.position = 'bottom') + 
+  labs(#title = 'Development of new regional specializations', 
+       #subtitle = 'By number of green and non green specializations in period 1 and 2',
+       x = 'N non-green specializations',
+       y = 'N green specializations',
+       size = 'N green patents',
+       col = 'HHI green patents') 
+
+ggsave("../output/paper_figs/fig_4.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_4.eps")
+
+rm(p1, p2)
+```
+
+
+# Analysis for existing green paths:
+
+NOTE: new patentds in specializations? 
+
+```{r}
+tech_rel_dev <- tech_rel %>% 
+  select(from, to, weight) %>%
+  left_join(tech_dev %>% distinct(nace_group, nuts), by = c('from' = 'nace_group')) %>%
+  # filter for rta in period 1
+  inner_join(tech_dev %>% filter(period == '1', rta_bin == 1) %>% select(nace_group, nuts, Y_tag), by = c('to' = 'nace_group', 'nuts')) %>%
+  # filter for new green specialization in period 2
+  semi_join(tech_dev %>% filter(period == '2', rta_bin == 1, rta_bin_delta == 1, Y_tag == TRUE), by = c('from' = 'nace_group', 'nuts')) %>%
+  rename(nace_group = from, related_techn = to) 
+```
+
+```{r, fig.width= 7.5, fig.height=7.5}
+p1 <- tech_rel_dev %>%
+  group_by(nuts, nace_group, Y_tag) %>%
+  summarise(rel_max = weight %>% max(),
+            rel_sum = weight %>% sum(),
+            rel_mean = weight %>% mean()) %>%
+  ungroup() %>%
+  #
+  group_by(nuts, Y_tag) %>%
+  summarise(rel = rel_max %>% mean()) %>%
+  ungroup() %>%
+  #
+  pivot_wider(names_from = Y_tag, values_from = rel, names_prefix = 'Y_', values_fill = 0) %>%
+  left_join(tech_dev %>% filter(Y_tag == TRUE, period == '2', rta_bin_delta == 1) %>% select(nuts , n_tech_region) %>% count(nuts, wt = n_tech_region), by = c('nuts')) %>%
+  mutate(country = nuts %>% str_sub(1,2)) 
+
+x_mid <- mean(p1$Y_FALSE, na.rm = TRUE)
+y_mid <- mean(p1$Y_TRUE, na.rm = TRUE)
+
+p1 %>%
+  filter(0.5 <= percent_rank(n)) %>%
+  ggplot(aes(x = Y_FALSE, y = Y_TRUE, size = n)) +
+  geom_vline(xintercept = x_mid, linetype = "dashed", color = 'grey') + 
+  geom_hline(yintercept = y_mid, linetype = "dashed", color = 'grey') +
+  geom_point(aes(col = country)) +
+  geom_text_repel(aes(label = nuts), box.padding = 0.5, max.overlaps = Inf) +
+  theme(legend.position="bottom") + 
+    labs(#title = 'New green specialization period 2', 
+       #subtitle = 'By nuts regions',
+       #note = 'Relatedness is the mean over all new green specializations, per green specialization largest relatedness to former specialization counted',
+       x = 'Relatedness non-green',
+       y = 'Relatedness green',
+       size = 'N green patents') 
+
+ggsave("../output/paper_figs/fig_5.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_5.eps")
+
+rm(p1, x_mid, y_mid)
+```
+
+
+```{r}
+library(regions)
+data(nuts_changes)
+list_nuts <- nuts_changes %>% select(code_2021, geo_name_2021) 
+colnames(list_nuts) <- c('nuts', 'nuts_name')
+
+list_nuts_add <- tibble(
+  nuts = c('NO011', 'NO012', 'NO021', 'NO022', 'NO031', 'NO032', 'NO033', 'NO034', 'NO041', 'NO042', 'NO043', 'NO051', 'NO052', 'NO053', 'NO061', 'NO062', 'NO071', 'NO072', 'NO073'),
+  nuts_name = c('Oslo', 'Akershus', 'Hedmark', 'Oppland', 'Østfold', 'Buskerud', 'Vestfold', 'Telemark', 'Aust-Agder', 'Vest-Agder', 'Rogaland', 'Hordaland', 'Sogn og Fjordane', 'Møre og Romsdal', 'Sør-Trøndelag', 'Nord-Trøndelag', 'Nordland', 'Troms', 'Finnmark')
+)
+
+list_nuts %<>% bind_rows(list_nuts_add)
+```
+
+
+
+
+```{r, fig.width=10, fig.height=10}
+p1 <- tech_rel_dev %>%
+  filter(nuts %in% select_region) %>%
+  group_by(nuts, nace_group, Y_tag) %>%
+  summarise(rel = weight %>% max()) %>%
+  ungroup() %>%
+  pivot_wider(names_from = Y_tag, values_from = rel, names_prefix = 'Y_', values_fill = 0) %>%
+  left_join(tech_dev %>% 
+              filter(Y_tag == TRUE, period == '2', rta_bin_delta == 1) %>% 
+              count(nuts, nace_group, wt = n_tech_region), 
+            by = c('nuts', 'nace_group')) %>%
+  mutate(country = nuts %>% str_sub(1,2)) %>%
+  left_join(list_nace2 %>%select(nace_group, nace_sec_name) %>% distinct(), by = 'nace_group') %>%
+  left_join(list_nuts %>% distinct(), by = 'nuts') %>% mutate(nuts_name = paste(nuts, nuts_name, sep = ': ') )
+
+x_mid <- mean(p1$Y_FALSE, na.rm = TRUE)
+y_mid <- mean(p1$Y_TRUE, na.rm = TRUE)
+
+# plotting
+p1 %>%
+  ggplot(aes(x = Y_FALSE, y = Y_TRUE, size = n, col = nace_sec_name)) +
+  geom_point() +
+  geom_text_repel(aes(label = nace_group), box.padding = 0.5) +
+  geom_vline(xintercept = x_mid, linetype = "dashed", color = 'grey') + 
+  geom_hline(yintercept = y_mid, linetype = "dashed", color = 'grey') +
+  facet_wrap(vars(nuts_name), ncol = n_regions) +
+  theme(legend.position = 'bottom',
+        legend.box = "vertical") +
+  labs(#title = 'New green specialization period 2', 
+       #subtitle = 'By nuts regions',
+       #note = 'Relatedness is the mean over all new green specializations, per green specialization largest relatedness to former specialization counted',
+       x = 'Relatedness non-green',
+       y = 'Relatedness green',
+       col = 'NACE',
+       size = 'N green patents') 
+
+ggsave("../output/paper_figs/fig_6.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_6.eps")
+
+rm(p1, x_mid, y_mid)
+```
+
+!!! MAke additio nal ploty including old green specializations
+
+# Profiling regions
+
+```{r}
+path_green_new <- tech_rel_dev %>%
+  group_by(nuts, nace_group, Y_tag) %>%
+  summarise(rel = weight %>% max()) %>%
+  ungroup() %>%
+  pivot_wider(names_from = Y_tag, values_from = rel, names_prefix = 'Y_', values_fill = 0) %>%
+  left_join(tech_dev %>% 
+              filter(Y_tag == TRUE, period == '2', rta_bin_delta == 1) %>% 
+              select(nuts, nace_group, n_tech_region) %>% 
+              count(nuts, nace_group, wt = n_tech_region), 
+            by = c('nuts', 'nace_group')) %>%
+  mutate(green_path = case_when( 
+    Y_FALSE <= mean(Y_FALSE) & Y_TRUE <= mean(Y_TRUE) ~ 'creation',
+    Y_FALSE <= mean(Y_FALSE) & Y_TRUE > mean(Y_TRUE) ~ 'diversification',
+    Y_FALSE > mean(Y_FALSE) & Y_TRUE <= mean(Y_TRUE) ~ 'renewal',
+    Y_FALSE > mean(Y_FALSE) & Y_TRUE > mean(Y_TRUE) ~ 'renewal'
+    ) ) %>%
+  select(-Y_FALSE, - Y_TRUE)
+```
+
+```{r}
+path_green <- tech_dev %>% 
+  mutate(green_path = case_when( 
+    Y_tag == TRUE & period == '2' & rta_bin == 1 & rta_bin_delta == 0 & pct_tech_region_delta < 0.1 ~ 'stagnation',
+    Y_tag == TRUE & period == '2' & rta_bin == 1 & rta_bin_delta == 0 & pct_tech_region_delta >= 0.1 ~ 'extension',
+    Y_tag == TRUE & period == '2' & rta_bin == 0 & rta_bin_delta == -1 ~ 'extinction'
+  )) %>%
+  drop_na(green_path) %>%
+  select(nuts, nace_group, n_tech_region_delta, green_path) %>%
+  rename(n = n_tech_region_delta) %>%
+  # add existing green paths
+  bind_rows(path_green_new) %>%
+  mutate(n = n %>% abs()) %>%
+  # add incumbant measures
+  left_join(region_techn_incumb %>% filter(period == '2', Y_tag == TRUE) %>% select(nuts, nace_group, share_inc), by = c('nuts', 'nace_group')) %>%
+  mutate(n_new = n * (1 - share_inc),
+         n_inc = n * share_inc)
+```
+
+* Below a radar plot summing all up.
+* It includes the share of green patents in nace groups folllowing a particular green path (within a nuts region)
+* Color indicates the share of incumbents (+5 years, +50 patents) in the path.
+* Can be used to identify a regions main path and overal profile.
+
+TODO: Increase text size
+
+```{r, fig.width=10, fig.height=12.5}
+path_green %>%
+  filter(nuts %in% select_region) %>% #, green_path != 'stagnation') %>%
+  # split by inc and non_incumbents
+  pivot_longer(c(n_new, n_inc), names_to = 'applt_type') %>% 
+  # Aggregate
+  count(nuts, green_path, applt_type, wt = value) %>%
+  complete(nuts, green_path, applt_type, fill = list('n' =  0)) %>%
+  # Add overall patents andf make share
+  left_join(region_RTA %>%filter(period == '2') %>%  count(nuts, wt = n_region, name = 'n_reg'), by = 'nuts') %>%
+  mutate(n_share = n ) %>% #/ n_reg) %>%
+  left_join(list_nuts %>% distinct(), by = 'nuts') %>% mutate(nuts_name = paste(nuts, nuts_name, sep = ': ') ) %>%
+  # plotting
+  ggplot() +
+  geom_col(aes(x = green_path, y = n_share, fill = applt_type), alpha = 0.8, position= "stack")  + 
+  # Lollipop shaft 
+  #geom_segment( aes(x = green_path, y = 0, xend = green_path, yend = 0.002), linetype = "dashed", color = "gray12") + 
+  # coord_polar() +
+  # coord_flip() + 
+  facet_wrap(vars(nuts_name), ncol = n_regions, scales = 'free') +
+  theme(axis.text.x = element_text(angle = 60, vjust = 1, hjust=1)) + 
+  theme(legend.position = 'bottom',
+        legend.box = "vertical") +
+  labs(#title = 'Regional green paths', 
+       #subtitle = 'By nuts regions',
+       x = NULL,
+       y = NULL,
+       size = 'Share green patents',
+       col = 'Green path type',
+       fill = 'Applicant type') 
+
+ggsave("../output/paper_figs/fig_7.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_7.eps")
+```
+
+Break down main path industry
+
+# Geoplotting
+
+* I also added a first plotting of main green paths
+* Works well, so we can adds furthr geoplots if necessary.
+
+```{r}
+# See: https://ropengov.github.io/giscoR/ 
+
+# Get map of nordics
+map_nordic <- gisco_get_nuts(country = c('DNK', 'SWE', 'NOR', 'FIN'), nuts_level = 3, year = '2016')
+
+# filter out Svalbart etc
+map_nordic %<>%
+  filter(!(NUTS_ID %in% c('NO0B1', 'NO0B2')))
+
+# Group by NUTS by country and convert to lines
+country_lines <- map_nordic %>%
+  group_by(CNTR_CODE) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  st_cast("MULTILINESTRING")
+```
+
+```{r, fig.width=8.5, fig.height=7.5}
+map_nordic %>%
+  # enter main green path
+  left_join(path_green %>% count(nuts, green_path, wt = n) %>% group_by(nuts) %>% slice_max(order_by = n, n = 1, with_ties = FALSE) %>% ungroup(), by = c('NUTS_ID' = 'nuts')) %>%
+  # plot
+  ggplot() + 
+  geom_sf(aes(fill = green_path)) +
+  geom_sf(data = country_lines, col = "blue", linewidth = 0.1) + 
+  theme_void() +
+  labs(#title = 'Map: Nordic main green paths', 
+       #subtitle = 'By nuts regions',
+       #note = 'Excluding NO0B1,NO0B2',
+       x = NULL,
+       y = NULL,
+       fill = 'Main green path') #+ theme(legend.position = 'bottom')
+
+ggsave("../output/paper_figs/fig_8.jpeg", dpi = 300)
+ggsave("../output/paper_figs/fig_8.eps")
+```
+
+# Tables
+
+```{r}
+# Basics Nr patents
+tab_basic <- tech_dev %>%
+  filter(period == 2) %>% 
+  count(nuts, Y_tag, wt = n_tech_region) %>%
+  pivot_wider(names_from = Y_tag, values_from = n, values_fill = 0, names_prefix = 'Y_') %>%
+  mutate(Y_FALSE = round(Y_FALSE), Y_TRUE = round(Y_TRUE),
+         Y_share = (Y_TRUE / (Y_FALSE + Y_TRUE)  ) %>% round(2)  ) %>%
+  left_join(list_nuts %>% distinct(), by = 'nuts') %>% mutate(nuts_name = paste(nuts, nuts_name, sep = ': ') ) %>%
+  relocate(nuts_name)
+
+# Applicant 
+tab_applt <- region_applt_appln %>%
+  rename(weight_applt = weight_frac) %>%
+  filter(period == 2) %>%
+  left_join(region_tech %>% select(appln_id, nuts, weight) %>% rename(weight_invt = weight), by = c('appln_id', 'nuts')) %>%
+  mutate(weight_all = weight_applt * weight_invt) %>%
+  count(nuts, han_name, han_id, Y_tag, wt = weight_all) %>%
+  pivot_wider(names_from = Y_tag, values_from = n, values_fill = 0, names_prefix = 'Y_') %>%
+  mutate(Y_FALSE = round(Y_FALSE), Y_TRUE = round(Y_TRUE),
+         Y_share = (Y_TRUE / (Y_FALSE + Y_TRUE)  ) %>% round(2)) %>% 
+  group_by(nuts) %>%
+  slice_max(order_by = Y_TRUE, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  left_join(applt_stats %>% select(han_id, incumbant) %>% mutate(incumbant = ifelse(incumbant == TRUE, 'incumb.', 'entrant')), by = 'han_id') %>%
+  mutate(applicant = paste0(han_name, ' (',incumbant ,', n green: ', Y_TRUE, ', share:', Y_share, ')')) %>%
+  select(nuts, applicant)
+
+tab_nace <- tech_dev %>% 
+  filter(period == 2, Y_tag == TRUE) %>%
+  group_by(nuts) %>%
+  slice_max(order_by = n_tech_region, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(top_Y_nace = paste0(nace_group, ' (n ', n_tech_region %>% round(), ')')) %>%
+  select(nuts, top_Y_nace)
+
+tab_cpc_Y <- data_docdb_fam_cpc %>%
+  mutate(cpc_Y = cpc_class_symbol %>% str_sub(1,4)) %>%
+  distinct(docdb_family_id, cpc_Y, .keep_all = TRUE) %>%
+  group_by(docdb_family_id) %>%
+  mutate(weight_frac = 1 / n()) %>%
+  ungroup() %>%
+  filter(cpc_Y %>% str_starts('Y02') | cpc_Y %>% str_starts('Y04')) %>%
+  count(docdb_family_id, cpc_Y, wt = weight_frac, name = 'weight_cpc') %>%
+  inner_join(data_appln %>% filter(period == '2') %>% distinct(appln_id, docdb_family_id), by = 'docdb_family_id') %>%
+  left_join(data_pers_appln %>% select(appln_id, nuts,weight_frac) %>% rename(weight_nuts = weight_frac), by = 'appln_id') %>%
+  mutate(weight_frac = weight_cpc * weight_nuts) %>%
+  count(cpc_Y, nuts, wt = weight_frac) %>%
+  group_by(nuts) %>%
+  slice_max(order_by = n, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  mutate(top_Y_cpc = paste0(cpc_Y, ' (n ', n %>% round(), ')')) %>%
+  select(nuts, top_Y_cpc)
+  
+# Note: Its silly that not all is indexed by docdb family.... change for next version
+          
+tab_path_rel <- path_green %>%
+  count(nuts, green_path, wt = n) %>%
+  group_by(nuts) %>%
+  mutate(share = (n / sum(n)) %>% round(2) ) %>%
+  ungroup() %>%
+  select(-n) %>%
+  pivot_wider(names_from = green_path, values_from = share, names_prefix= '% path ', values_fill = 0) %>%
+  arrange(nuts)
+
+tab_path_total <- path_green %>%
+  count(nuts, green_path, wt = n) %>%
+  mutate(n = n %>% round()) %>%
+  pivot_wider(names_from = green_path, values_from = n, names_prefix= 'n path ', values_fill = 0) %>%
+  arrange(nuts)
+```
+
+```{r}
+tab_all <- tab_basic %>%
+  left_join(tab_cpc_Y, by = 'nuts') %>%  
+  left_join(tab_nace, by = 'nuts') %>%  
+  left_join(tab_applt, by = 'nuts') %>%
+  left_join(tab_path_rel, by = 'nuts') %>%
+  left_join(tab_path_total, by = 'nuts') %>%
+  select(-nuts)
+
+tab_all
+```
+
+
+```{r}
+tab_all %>% write_csv2('../output/table_regions_all.csv')
+```
+
+
+```{r, results='asis'}
+#library(stargazer)
+#tab_all %>% stargazer(summary = FALSE, type = 'html')
+```
+
+
+# Endnotes
+
+```{r}
+sessionInfo()
+```
+
+
+<!---
+
+DROPPED FOR NOW
+
+# Tech Space changes
+
+```{r}
+plot_techspace_dev <- function(g, rta_df, dev_df, region, time = '2', layout_nw = 'nicely'){
+  # TODO, C&P function from below once finished
+}
+```
+
+```{r}
+# plot_techspace_dev(g = g_tech, rta_df = tech_dev, region = 'DK013', layout_nw = coords_tech) 
+```
+
+
+TODO: GO ON HERE AND DO BETTER DATAVIZ
+
+```{r}
+# TEst for function development
+g = g_tech
+rta_df = tech_dev
+dev_df = tech_rel_dev 
+region = 'DK013'
+time = '2'
+layout_nw = coords_tech
+
+rta_df %<>% 
+  filter(nuts == region, period == time, Y_tag == TRUE) %>% 
+  select(nace_group, rta, n_tech_region)
+  
+dev_df %<>%
+  filter(nuts == region) %>% 
+  group_by(nace_group) %>%
+  summarise(prev_nongreen = max(nace_group == related_techn, na.rm = TRUE) %>% as.logical()) %>%
+  ungroup() %>%
+  replace_na(list(prev_nongreen = FALSE)) %>%
+  select(nace_group, prev_nongreen)
+
+g <- g %N>%
+  mutate(label = nace_group_name %>% str_trunc(50, side = 'right')) %>%
+  left_join(rta_df, by = c("name" = "nace_group")) %N>%
+  left_join(dev_df, by = c("name" = "nace_group")) 
+
+g %>%
+  ggraph(layout =  coords_tech) + 
+  geom_edge_link(aes(width = weight, alpha = weight), colour = "grey") + 
+  geom_node_point(aes(colour = rta, shape = prev_nongreen, size = n_tech_region, filter = rta >= 1)) + 
+  geom_node_text(aes(label = label, size = n_tech_region, filter = rta >= 1), repel = TRUE) +
+  scale_color_gradient2(low = "skyblue", mid = 'yellow', high = "red", midpoint = 1) +
+  theme_void() +
+  theme(legend.position="bottom") + 
+  labs(title = paste("Industry Space:", region, sep = " "),
+       subtitle = 'Nodes = NACE 2 Industries. Edges: Relatedness',
+       caption = '')
+```
+
+--->

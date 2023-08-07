@@ -145,10 +145,10 @@ plot
 
 ```{r}
 par(mfrow = c(1, 1))
-plot_gg(plot, width = 5, height = 4, scale = 300, multicore = TRUE, windowsize = c(1000, 800))
+plot_gg(plot, width = 5, height = 4, scale = 600, multicore = TRUE, windowsize = c(1000, 800))
 #render_camera(fov = 40, zoom = 0.5)
 
-render_snapshot() # clear = FALSE
+#render_snapshot() # clear = FALSE
 ```
 
 ```{r}

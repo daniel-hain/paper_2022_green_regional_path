@@ -1,0 +1,171 @@
+---
+title: 'Green Regional Path paper: Geoplotting'
+author: "Daniel S. Hain"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_notebook:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+---
+
+```{r, setup, include=FALSE}
+### general options
+Sys.setenv(LANG = "en")
+options("scipen" = 100, "digits" = 4) # override R's tendency to use scientific notation
+
+### Clean workspace
+rm(list=ls())
+graphics.off()
+
+### Load packages (maybe need to be installed first)
+# Standard
+library(tidyverse) # General DS toolkit
+library(magrittr) # For advanced piping
+
+# Databases
+library(DBI) # GEneral R database interface
+library(RPostgres) # PostgreSQL interface driver 
+library(dbplyr) # for dplyr with databases
+
+# networks
+library(tidygraph)
+library(ggraph)
+library(ggrepel)
+
+# GEoplot
+library(giscoR)
+library(sf)
+
+library(rayshader)
+```
+
+
+### Connect to database
+
+```{r}
+# Load script with variables
+source("../variables.R")
+
+# set up connection to existing PostgreSQL database, just plug in own details
+con <- dbConnect(drv = RPostgres::Postgres(), 
+                 dbname = var_dbname,
+                 host = var_host, 
+                 port = var_port,
+                 user = var_user, 
+                 password = var_password,
+                 sslmode = 'require'
+                 )
+
+rm(var_dbname, var_host, var_password, var_port, var_user)
+```
+
+```{r}
+con %>% dbListTables() %>% sort()
+```
+
+# INtro
+
+* GEneral tutorial: https://www.rayshader.com/
+* Also check: https://github.com/Pecners/rayshader_portraits
+* for example here: https://github.com/Pecners/kontur_rayshader_tutorial 
+
+# Get and merge data
+
+```{r}
+#Create tables
+tbl_geo_inventor <- tbl(con, 'xtra_geo_inventor')
+tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
+```
+
+```{r}
+data_appln <- read_rds('../temp/data_appln.rds')
+data_pers_appln  <- read_rds('../temp/data_pers_appln.rds')
+```
+
+
+```{r}
+list_countries <- tibble(person_ctry_code = c('DK', 'SE', 'FI', 'NO'))
+
+data_geo_green <- data_appln %>%
+  select(appln_id, earliest_filing_id, docdb_family_id, appln_filing_year, nb_inventors, Y_tag, period) %>%
+  inner_join(tbl_geo_inventor %>% 
+               semi_join(list_countries, by = 'person_ctry_code', copy = TRUE) %>%
+               select(appln_id, lat, lon), by = c('earliest_filing_id' = 'appln_id'), copy = TRUE)
+```
+
+
+```{r}
+# Get map of nordics
+map_nordic <- gisco_get_nuts(country = c('DNK', 'SWE', 'NOR', 'FIN'), nuts_level = 3, year = '2016')
+
+# filter out Svalbart etc
+map_nordic %<>%
+  filter(!(NUTS_ID %in% c('NO0B1', 'NO0B2')))
+
+# Group by NUTS by country and convert to lines
+country_lines <- map_nordic %>%
+  group_by(CNTR_CODE) %>%
+  summarise(n = n()) %>%
+  ungroup() %>%
+  st_cast("MULTILINESTRING")
+```
+
+
+```{r}
+# VErsion 1
+data_geo_green %>% 
+  ggplot(aes(x = lon, y = lat)) +
+  geom_hex(bins = 100, size = 0.01) +
+  scale_fill_viridis_c(option = "C")  +
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white",colour = "white") )
+```
+
+
+
+```{r}
+# VErsion 2
+plot <- map_nordic %>%
+  ggplot() +
+  #geom_sf(fill = 'grey') +
+  geom_sf(data = country_lines, col = "darkgrey", fill = 'grey', linewidth = 0.1) + 
+  geom_hex(data = data_geo_green %>% filter(Y_tag == TRUE), aes(x = lon, y = lat), bins =1000, size = 0.01) +
+  scale_fill_viridis_c(option = "C") + # paletteer::scale_fill_paletteer_c("grDevices::Zissou 1") + 
+  theme_void() +
+  theme(plot.background = element_rect(fill = "white",colour = "white"),
+        legend.position = 'none')
+
+plot
+```
+
+
+```{r}
+par(mfrow = c(1, 1))
+plot_gg(plot, width = 5, height = 4, scale = 600, multicore = TRUE, windowsize = c(1000, 800))
+#render_camera(fov = 40, zoom = 0.5)
+
+#render_snapshot() # clear = FALSE
+```
+
+```{r}
+render_highquality(
+  filename = '../output/geodist_nordic_patents_green.png',
+  samples = 100, 
+    preview = FALSE,
+    light = TRUE,
+    lightdirection = rev(c(210, 210, 200, 200)),
+    lightintensity = c(750, 100, 1000, 100),
+    lightaltitude = c(10, 80, 10, 80),
+    interactive = FALSE,
+    width = 9000, height = 9000)
+```
+
+
+```{r}
+Sys.info()
+```
+

@@ -60,6 +60,14 @@ rm(var_dbname, var_host, var_password, var_port, var_user)
 con %>% dbListTables() %>% sort()
 ```
 
+# Defining parameters
+
+```{r}
+var_t_start <- 1985
+var_t_end <- 2015
+var_t_break <- 2000
+```
+
 # Main Data
 
 ## Loading tables
@@ -71,20 +79,19 @@ tbl_pers_appln <- tbl(con, 'tls207_pers_appln')
 tbl_person <- tbl(con, 'tls206_person')
 tbl_appln_cpc <- tbl(con, 'tls224_appln_cpc')
 tbl_docdb_fam_cpc <- tbl(con, 'tls225_docdb_fam_cpc')
-tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
-tbl_appln_nace2 <- tbl(con, 'tls229_appln_nace2')
-# tbl_tech_field <- tbl(con, 'tls230_appln_techn_field')
+tbl_isic_cpc <- tbl(con, 'xtra_isic_cpc')
+
 ```
 
 # Regions
 
 ```{r}
-select_region <- tibble(
+select_region_nordic <- tibble(
   person_ctry_code = c('SE', 'NO','DK', 'FI'
   )) %>%
-  copy_to(con, ., "xtra_select_region",
-  temporary = TRUE, overwrite = TRUE)
-tbl_select_region <- tbl(con, 'xtra_select_region')
+  copy_to(con, ., "xtra_select_region", 
+          temporary = TRUE, overwrite = TRUE)
+#tbl_select_region <- tbl(con, 'xtra_select_region')
 
 # # or select by nuts
 # nuts = c(
@@ -97,7 +104,7 @@ tbl_select_region <- tbl(con, 'xtra_select_region')
 # select persons in regions
 tbl_region_person <- tbl_person %>%
   filter(nuts_level == 3) %>%
-  semi_join(tbl_select_region, by = 'person_ctry_code') %>%
+  #semi_join(tbl_select_region, by = 'person_ctry_code') %>%
   compute()
 ```
 
@@ -113,19 +120,32 @@ tbl_region_pers_appln <- tbl_pers_appln %>%
   compute()
 ```
 
+
+
 ```{r}
-# Update person dataframe for only inventors
+# Identify applications
+tbl_region_appln <- tbl_appln %>%
+  # filter
+  filter(granted == 'Y',
+         appln_filing_year >= var_t_start,
+         appln_filing_year <= var_t_end)  %>%
+  # Restrict to EU
+  semi_join(tbl_region_pers_appln, by = 'appln_id')  %>%
+  # Reduce to PAtent family
+  group_by(docdb_family_id) %>%
+    slice_min(order_by = appln_filing_date, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  # Insert period
+  compute()
+```
+
+```{r}
+# Update person dataframe for only inventors 
 tbl_region_person  %<>%
   semi_join(tbl_region_pers_appln, by = 'person_id') %>%
   compute()
 ```
 
-```{r}
-# Identify applications
-tbl_region_appln <- tbl_appln %>%
-  semi_join(tbl_region_pers_appln, by = 'appln_id') %>%
-  compute()
-```
 
 # Technologies
 
@@ -152,19 +172,28 @@ tbl_region_appln %<>%
 ```{r}
 tbl_region_appln %>% count(Y_tag)
 ```
-
 ```{r}
-# Filter Nace codes per application
-tbl_region_appln_nace2 <- tbl_appln_nace2 %>%
-  semi_join(tbl_region_appln, by = 'appln_id') %>%
+# Update person dataframe for only inventors (with Y-tag)
+tbl_region_pers_appln   %<>%
+  inner_join(tbl_region_appln %>% select(appln_id, Y_tag), by = 'appln_id') %>%
   compute()
 ```
 
+
+# Industries
+
 ```{r}
-# # Filter tech fields ----> NOTE: Not needed now anymore
-# tbl_region_tech_field <- tbl_tech_field %>%
-#  semi_join(tbl_region_appln, by = 'appln_id') %>%
-#  compute()
+tbl_appln_isic <- tbl_region_docdb_fam_cpc %>%
+  select(docdb_family_id, cpc_class_symbol) %>%
+  semi_join(tbl_region_appln, by = 'docdb_family_id') %>%
+  mutate(cpc3 = cpc_class_symbol %>% str_sub(1, 3)) %>%
+  inner_join(tbl_isic_cpc, by = 'cpc3') %>%
+  # Select one level higher
+  mutate(isic4_l3 = isic4_l4 %>% str_sub(1, 3)) %>%
+  group_by(docdb_family_id, isic4_l3) %>%
+  summarise(probability_weight = sum(probability_weight, na.rm = TRUE)) %>%
+  ungroup() %>%
+  compute()
 ```
 
 # Applicants
@@ -177,19 +206,26 @@ Note: Applicants patents to region via inventor
 
 # Identify person-applications
 tbl_region_applt_appln <- tbl_pers_appln %>%
-  filter(applt_seq_nr > 0) %>%
+  filter(applt_seq_nr > 0) %>% # Only applicant
+  semi_join(tbl_person %>% # Only nordics
+              semi_join(select_region_nordic, by = 'person_ctry_code'),
+            by = 'person_id') %>%
+  inner_join(tbl_region_appln %>% select(appln_id, Y_tag), by = 'appln_id') %>%
   group_by(appln_id) %>%
   mutate(n_applt = n()) %>%
   ungroup() %>%
   mutate(weight_frac = 1/n_applt) %>%
-  semi_join(tbl_region_appln, by = 'appln_id') %>%
   compute()
+```
 
+```{r}
 # Identify applicants
 tbl_region_applt <- tbl_person  %>%
   semi_join(tbl_region_applt_appln, by = 'person_id') %>%
   compute()
 ```
+
+
 
 # Save all
 
@@ -203,11 +239,12 @@ tbl_region_applt_appln %>% collect() %>% write_rds('../temp/tbl_region_applt_app
 tbl_region_applt %>% collect() %>% write_rds('../temp/tbl_region_applt.rds')
 
 tbl_region_docdb_fam_cpc %>% collect() %>% write_rds('../temp/tbl_region_docdb_fam_cpc.rds')
-tbl_region_appln_nace2 %>% collect() %>% write_rds('../temp/tbl_region_appln_nace2.rds')
-# tbl_region_tech_field %>% collect() %>% write_rds('../temp/tbl_region_tech_field.rds')
+tbl_appln_isic %>% collect() %>% write_rds('../temp/tbl_appln_isic.rds')
 ```
 
 # close
+
+
 
 ```{r}
 dbDisconnect(con)
@@ -216,5 +253,6 @@ dbDisconnect(con)
 ```{r}
 sessionInfo()
 ```
+
 
 

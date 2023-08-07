@@ -1,0 +1,210 @@
+---
+title: 'Green Regional Path paper: Preprocessing (SQL)'
+author: "Daniel S. Hain"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_notebook:
+    df_print: paged
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+    number_sections: yes
+    code_folding: hide
+---
+
+## Setup
+
+```{r, setup, include=FALSE}
+# Not sure if necessary... was an issue with a version conflict... try new version in the future again...
+# devtools::install_version("RPostgres", version = "1.2.1", repos = "http://cran.us.r-project.org")
+
+### general options
+Sys.setenv(LANG = "en")
+options("scipen" = 100, "digits" = 4) # override R's tendency to use scientific notation
+
+### Clean workspace
+rm(list=ls())
+graphics.off()
+
+### Load packages (maybe need to be installed first)
+# Standard
+library(tidyverse) # General DS toolkit
+library(magrittr) # For advanced piping
+
+# Databases
+library(DBI) # GEneral R database interface
+library(RPostgres) # PostgreSQL interface driver 
+library(dbplyr) # for dplyr with databases
+```
+
+### Connect to database
+
+```{r}
+# Load script with variables
+source("../variables.R")
+
+# set up connection to existing PostgreSQL database, just plug in own details
+con <- dbConnect(drv = RPostgres::Postgres(), 
+                 dbname = var_dbname,
+                 host = var_host, 
+                 port = var_port,
+                 user = var_user, 
+                 password = var_password,
+                 sslmode = 'require'
+                 )
+
+rm(var_dbname, var_host, var_password, var_port, var_user)
+```
+
+```{r}
+con %>% dbListTables() %>% sort()
+```
+
+# Main Data
+
+## Loading tables
+
+```{r}
+tbl_appln <- tbl(con, 'tls201_appln')
+tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
+tbl_pers_appln <- tbl(con, 'tls207_pers_appln') 
+tbl_person <- tbl(con, 'tls206_person')
+tbl_appln_cpc <- tbl(con, 'tls224_appln_cpc')
+tbl_docdb_fam_cpc <- tbl(con, 'tls225_docdb_fam_cpc')
+tbl_appln_prior <- tbl(con, 'tls204_appln_prior')
+tbl_appln_nace2 <- tbl(con, 'tls229_appln_nace2')
+# tbl_tech_field <- tbl(con, 'tls230_appln_techn_field')
+```
+
+# Regions
+
+```{r}
+select_region <- tibble(
+  person_ctry_code = c('SE', 'NO','DK', 'FI'
+  )) %>%
+  copy_to(con, ., "xtra_select_region",
+  temporary = TRUE, overwrite = TRUE)
+tbl_select_region <- tbl(con, 'xtra_select_region')
+
+# # or select by nuts
+# nuts = c(
+#     'SE232', # Västra Götaland county
+#     'NO043', # Rogaland 
+#     'DK012' # Copenhagen suburbs))
+```
+
+```{r}
+# select persons in regions
+tbl_region_person <- tbl_person %>%
+  filter(nuts_level == 3) %>%
+  semi_join(tbl_select_region, by = 'person_ctry_code') %>%
+  compute()
+```
+
+```{r}
+# Identify person-applications
+tbl_region_pers_appln <- tbl_pers_appln %>%
+  filter(invt_seq_nr > 0) %>%
+  inner_join(tbl_region_person %>% select(person_id, person_ctry_code, nuts), by = 'person_id') %>%
+  compute()
+```
+
+```{r}
+# Update person dataframe for only inventors
+tbl_region_person  %<>%
+  semi_join(tbl_region_pers_appln, by = 'person_id') %>%
+  compute()
+```
+
+```{r}
+# Identify applications
+tbl_region_appln <- tbl_appln %>%
+  semi_join(tbl_region_pers_appln, by = 'appln_id') %>%
+  compute()
+```
+
+# Technologies
+
+```{r}
+# Filter CPCs in region and label Y02 tags
+tbl_region_docdb_fam_cpc <- tbl_docdb_fam_cpc %>%
+  semi_join(tbl_region_appln, by = 'docdb_family_id') %>%
+  mutate(Y_tag = cpc_class_symbol %like% 'Y02%') %>%
+  compute()
+```
+
+```{r}
+# Identify person-applications
+tbl_region_appln %<>%
+  left_join(tbl_region_docdb_fam_cpc %>% 
+              filter(Y_tag == TRUE) %>% 
+              distinct(docdb_family_id, Y_tag), 
+            by = 'docdb_family_id') %>%
+  replace_na(list(Y_tag = FALSE))  %<>%
+  compute()
+```
+
+```{r}
+tbl_region_appln %>% count(Y_tag)
+```
+
+```{r}
+# Filter Nace codes per application
+tbl_region_appln_nace2 <- tbl_appln_nace2 %>%
+  semi_join(tbl_region_appln, by = 'appln_id') %>%
+  compute()
+```
+
+```{r}
+# # Filter tech fields ----> NOTE: Not needed now anymore
+# tbl_region_tech_field <- tbl_tech_field %>%
+#  semi_join(tbl_region_appln, by = 'appln_id') %>%
+#  compute()
+```
+
+# Applicants
+
+Note: Not applicants from the region, but applicants that have inventors in the region
+
+```{r}
+# Now get the applicants of all the applcations
+
+# Identify person-applications
+tbl_region_applt_appln <- tbl_pers_appln %>%
+  filter(applt_seq_nr > 0) %>%
+  semi_join(tbl_region_appln, by = 'appln_id') %>%
+  compute()
+
+# Identify applicants
+tbl_region_applt <- tbl_person  %>%
+  semi_join(tbl_region_applt_appln, by = 'person_id') %>%
+  compute()
+```
+
+# Save all
+
+```{r}
+tbl_region_appln %>% collect() %>% write_rds('../temp/tbl_region_appln.rds')
+
+tbl_region_pers_appln %>% collect() %>% write_rds('../temp/tbl_region_pers_appln.rds')
+tbl_region_person %>% collect() %>% write_rds('../temp/tbl_region_person.rds')
+
+tbl_region_applt_appln %>% collect() %>% write_rds('../temp/tbl_region_applt_appln.rds')
+tbl_region_applt %>% collect() %>% write_rds('../temp/tbl_region_applt.rds')
+
+tbl_region_docdb_fam_cpc %>% collect() %>% write_rds('../temp/tbl_region_docdb_fam_cpc.rds')
+tbl_region_appln_nace2 %>% collect() %>% write_rds('../temp/tbl_region_appln_nace2.rds')
+# tbl_region_tech_field %>% collect() %>% write_rds('../temp/tbl_region_tech_field.rds')
+```
+
+# close
+
+```{r}
+dbDisconnect(con)
+```
+
+```{r}
+sessionInfo()
+```
+
+
